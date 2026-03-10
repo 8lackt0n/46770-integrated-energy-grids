@@ -61,6 +61,47 @@ def plot_annual_energy_mix(df):
     plt.tight_layout()
     plt.show()
 
+def plot_duration_curve(df):
+    colors, background_color = color_palette()
+
+    wind_sorted = df["Wind Generator"].sort_values(ascending=False).reset_index(drop=True)
+    solar_sorted = df["Solar Generator"].sort_values(ascending=False).reset_index(drop=True)
+    gas_sorted = df["OCGT"].sort_values(ascending=False).reset_index(drop=True)
+    coal_sorted = df["Coal"].sort_values(ascending=False).reset_index(drop=True)
+
+    hours = range(len(df))
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+
+    ax.plot(hours, wind_sorted, label="Wind", color=colors[13])
+    ax.plot(hours, solar_sorted, label="Solar", color=colors[12])
+    ax.plot(hours, gas_sorted, label="Gas", color=colors[14])
+    ax.plot(hours, coal_sorted, label="Coal", color=colors[15])
+
+    ax.set_xlabel("Hours (sorted)")
+    ax.set_ylabel("Generation [MWh]")
+
+    ax.text(0.0, 1.07,
+        "Generation Duration Curve",
+        transform=ax.transAxes,
+        fontsize=14,
+        fontweight="bold"
+    )
+
+    ax.text(0.0, 1.03,
+        "Sorted hourly generation for each technology",
+        transform=ax.transAxes,
+        fontsize=10
+    )
+
+    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc="upper center")
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    plt.tight_layout()
+    plt.show()
+
 def plot_capacity_variability(capacity_df):
 
     colors, background_color = color_palette()

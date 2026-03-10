@@ -140,3 +140,5 @@ if __name__ == "__main__":
     plot_dispatch(july_week, dispatch[july_week_mask], 'Optimal Hourly Dispatch for One Week in July, 2017')
     
     plot_annual_energy_mix(dispatch)
+
+    plot_duration_curve(dispatch)
