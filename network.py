@@ -45,7 +45,7 @@ class Network():
                     bus="Electricity Bus", 
                     carrier="Wind", 
                     capital_cost = capital_cost_wind,
-                    p_max_pu=wind_cf.values)
+                    p_max_pu=self.wind_cf.values)
 
         capital_cost_solar = annuity(25,0.07)*425000*(1+0.03) # in €/MW
         self.network.add("Generator", 
@@ -54,7 +54,7 @@ class Network():
                     bus="Electricity Bus", 
                     carrier="Solar", 
                     capital_cost = capital_cost_solar,
-                    p_max_pu=solar_cf.values)
+                    p_max_pu=self.solar_cf.values)
 
         capital_cost_OCGT = annuity(25,0.07)*560000*(1+0.033) # in €/MW
         fuel_cost = 21.6 # in €/MWh_th
@@ -80,16 +80,28 @@ class Network():
                     carrier="Coal",
                     capital_cost = capital_cost_coal,
                     marginal_cost = marginal_cost_coal)
+        
+        self.network.sanitize()
 
     def optimize_network(self):
-        self.network.optimize(solver_name="gurobi")
+        self.network.optimize(
+            solver_name="gurobi",
+            solver_options={"OutputFlag": 0},
+            include_objective_constant=True  # explicitly match current behavior
+        )
         
     def display_results(self):
-        
-        print("Optimal generation:")
-        print(self.network.generators_t.p)
-        
-        return self.network.generators_t.p
+
+        capacities = self.network.generators.p_nom_opt
+        dispatch = self.network.generators_t.p
+
+        #print("Optimal capacities:")
+        #print(capacities)
+
+        #print("Optimal generation:")
+        #print(dispatch)
+
+        return dispatch, capacities
         
 
 if __name__ == "__main__":
@@ -111,7 +123,7 @@ if __name__ == "__main__":
     network = Network(load, wind_cf, solar_cf, hours)
     network.build_network()
     network.optimize_network()
-    results = network.display_results()
+    dispatch, _ = network.display_results()
     
     ### PLOTS ###
     
@@ -119,12 +131,12 @@ if __name__ == "__main__":
     january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
     january_week = hours[january_week_mask]
     
-    plot_dispatch(january_week, results[january_week_mask], 'Optimal Hourly Dispatch for One Week in January, 2017')
+    plot_dispatch(january_week, dispatch[january_week_mask], 'Optimal Hourly Dispatch for One Week in January, 2017')
     
     # Plot one week in July
     july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
     july_week = hours[july_week_mask]
     
-    plot_dispatch(july_week, results[july_week_mask], 'Optimal Hourly Dispatch for One Week in July, 2017')
+    plot_dispatch(july_week, dispatch[july_week_mask], 'Optimal Hourly Dispatch for One Week in July, 2017')
     
-    plot_annual_energy_mix(results)
+    plot_annual_energy_mix(dispatch)

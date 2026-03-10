@@ -61,5 +61,43 @@ def plot_annual_energy_mix(df):
     plt.tight_layout()
     plt.show()
 
+def plot_capacity_variability(capacity_df):
+
+    colors, background_color = color_palette()
+
+    avg = capacity_df.mean()
+    std = capacity_df.std()
+
+    fig, ax = plt.subplots(figsize=(10,6))
+
+    ax.bar(
+        avg.index,
+        avg.values,
+        yerr=std.values,
+        capsize=5,
+        color=[colors[13], colors[12], colors[14], colors[15]]
+    )
+
+    ax.set_ylabel("Installed Capacity [MW]")
+
+    ax.text(0.0, 1.07,
+        "Average Generator Capacity with Weather Variability",
+        transform=ax.transAxes,
+        fontsize=14,
+        fontweight="bold"
+    )
+
+    ax.text(0.0, 1.03,
+        "Error bars show standard deviation across weather years",
+        transform=ax.transAxes,
+        fontsize=10
+    )
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    plt.tight_layout()
+    plt.show()
+
 def save_plot(file_name):
     plt.savefig(file_name, dpi=300, bbox_inches='tight', folder='plots')
