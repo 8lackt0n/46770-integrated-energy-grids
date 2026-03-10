@@ -1,0 +1,65 @@
+import matplotlib.pyplot as plt
+import os
+
+def color_palette():
+    ### Color Theme ###
+    background_color = "#FAEEDD"
+
+    color_palette = [
+    "#B00020",  # Deep Crimson (darker than original red)
+    "#D62828",  # Red
+    "#E04A2E",  # Strong Red-Orange
+    "#F26430",  # Vivid Vermilion
+    "#F77F4F",  # Coral
+    "#F9A45C",  # Bright Warm Orange
+    "#FBBF6B",  # Golden Orange
+    "#F5C07A",  # Muted Gold
+    "#F2D8A0",  # Light Warm Sand
+    "#2A9D8F",  # Teal
+    "#66C2A4",  # Light Teal    
+    "#A0E7D6",  # Very Light Teal
+    "#FBBF6B",  # PV - Golden Orange
+    "#5C97D9",  # Wind - Blue
+    "#21B582",  # Gas - Dark Green
+    "#7D7878",  # Coal - Black
+]
+    return color_palette, background_color
+
+def plot_dispatch(time_index, df, title):
+    colors, background_color = color_palette()
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.step(time_index, df['Wind Generator'], label='Wind Production [MWh]', color=colors[13])
+    ax.step(time_index, df['Solar Generator'], label='PV Production [MWh]', color=colors[12])
+    ax.step(time_index, df['OCGT'], label='Gas Production [MWh]', color=colors[14])
+    ax.step(time_index, df['Coal'], label='Coal Production [MWh]', color=colors[15])
+    ax.set_xlabel('Time')
+    ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
+    ax.text(0.0, 1.03, 'Wind, Solar, Gas, and Coal Production in MWh', transform=ax.transAxes, fontsize=10, color='black', ha='left')
+    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_annual_energy_mix(df):
+    colors, background_color = color_palette()
+    
+    tot_wind = sum(df["Wind Generator"])
+    tot_solar = sum(df["Solar Generator"])
+    tot_gas = sum(df["OCGT"])
+    tot_coal = sum(df["Coal"])
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.pie([tot_wind, tot_solar, tot_gas, tot_coal], labels=['Wind', 'Solar', 'Gas', 'Coal'], colors=[colors[13], colors[12], colors[14], colors[15]], autopct='%1.1f%%')
+    ax.text(0.0, 1.07, 'Annual Energy Mix', transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
+    ax.text(0.0, 1.03, 'Total Wind, Solar, Gas, and Coal Production in MWh', transform=ax.transAxes, fontsize=10, color='black', ha='left')
+    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    plt.tight_layout()
+    plt.show()
+
+def save_plot(file_name):
+    plt.savefig(file_name, dpi=300, bbox_inches='tight', folder='plots')
