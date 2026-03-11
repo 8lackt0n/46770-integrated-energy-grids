@@ -25,14 +25,18 @@ def color_palette():
 ]
     return color_palette, background_color
 
-def plot_dispatch(time_index, df, title):
+def plot_dispatch(time_index, df, load, title):
     colors, background_color = color_palette()
     
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.step(time_index, df['Wind Generator'], label='Wind Production [MWh]', color=colors[13])
-    ax.step(time_index, df['Solar Generator'], label='PV Production [MWh]', color=colors[12])
-    ax.step(time_index, df['OCGT'], label='Gas Production [MWh]', color=colors[14])
-    ax.step(time_index, df['Coal'], label='Coal Production [MWh]', color=colors[15])
+    ax.stackplot(time_index, 
+                 df['Wind Generator'], 
+                 df['Solar Generator'], 
+                 df['OCGT'], 
+                 df['Coal'],
+                 labels=['Wind Production [MWh]', 'PV Production [MWh]', 'Gas Production [MWh]', 'Coal Production [MWh]'],
+                 colors=[colors[13], colors[12], colors[14], colors[15]])
+    ax.plot(time_index, load, label='Load [MWh]', color='black', linewidth=2)
     ax.set_xlabel('Time')
     ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
     ax.text(0.0, 1.03, 'Wind, Solar, Gas, and Coal Production in MWh', transform=ax.transAxes, fontsize=10, color='black', ha='left')
