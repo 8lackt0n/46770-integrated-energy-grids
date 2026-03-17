@@ -1,46 +1,65 @@
 import matplotlib.pyplot as plt
 import os
 
-def color_palette():
-    ### Color Theme ###
-    background_color = "#FAEEDD"
 
+def color_palette():
+    background_color = "#FAEEDD"
     color_palette = [
-    "#B00020",  # Deep Crimson (darker than original red)
-    "#D62828",  # Red
-    "#E04A2E",  # Strong Red-Orange
-    "#F26430",  # Vivid Vermilion
-    "#F77F4F",  # Coral
-    "#F9A45C",  # Bright Warm Orange
-    "#FBBF6B",  # Golden Orange
-    "#F5C07A",  # Muted Gold
-    "#F2D8A0",  # Light Warm Sand
-    "#2A9D8F",  # Teal
-    "#66C2A4",  # Light Teal    
-    "#A0E7D6",  # Very Light Teal
-    "#FBBF6B",  # PV - Golden Orange
-    "#5C97D9",  # Wind - Blue
-    "#21B582",  # Gas - Dark Green
-    "#7D7878",  # Coal - Black
-]
+        "#B00020",
+        "#D62828",
+        "#E04A2E",
+        "#F26430",
+        "#F77F4F",
+        "#F9A45C",
+        "#FBBF6B",
+        "#F5C07A",
+        "#F2D8A0",
+        "#2A9D8F",
+        "#66C2A4",
+        "#A0E7D6",
+        "#FBBF6B",  # PV
+        "#5C97D9",  # Wind
+        "#21B582",  # Gas
+        "#7D7878",  # Coal
+    ]
     return color_palette, background_color
+
+
+def save_plot(fig, fig_title, folder="plots"):
+    os.makedirs(folder, exist_ok=True)
+    filepath = os.path.abspath(os.path.join(folder, f"{fig_title}.png"))
+    print("Saving to:", filepath)
+    fig.savefig(filepath, dpi=300, bbox_inches="tight")
+    print(f"Saved plot to: {filepath}")
+
 
 def plot_dispatch(time_index, df, title):
     colors, background_color = color_palette()
-    
+
     fig, ax = plt.subplots(figsize=(10, 6))
-    ax.step(time_index, df['Wind Generator'], label='Wind Production [MWh]', color=colors[13])
-    ax.step(time_index, df['Solar Generator'], label='PV Production [MWh]', color=colors[12])
-    ax.step(time_index, df['OCGT'], label='Gas Production [MWh]', color=colors[14])
-    ax.step(time_index, df['Coal'], label='Coal Production [MWh]', color=colors[15])
-    ax.set_xlabel('Time')
-    ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
-    ax.text(0.0, 1.03, 'Wind, Solar, Gas, and Coal Production in MWh', transform=ax.transAxes, fontsize=10, color='black', ha='left')
-    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    ax.step(time_index, df["Wind Generator"], label="Wind Production [MWh]", color=colors[13])
+    ax.step(time_index, df["Solar Generator"], label="PV Production [MWh]", color=colors[12])
+    ax.step(time_index, df["OCGT"], label="Gas Production [MWh]", color=colors[14])
+    ax.step(time_index, df["Coal"], label="Coal Production [MWh]", color=colors[15])
+
+    ax.set_xlabel("Time")
+    ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14,
+            color="black", ha="left", fontweight="bold")
+    ax.text(0.0, 1.03, "Wind, Solar, Gas, and Coal Production in MWh",
+            transform=ax.transAxes, fontsize=10, color="black", ha="left")
+
+    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc="upper center")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    fig_title = title.replace(" ", "_").lower()
     plt.tight_layout()
-    plt.show()
+    print("About to save:", fig_title)
+    save_plot(fig,fig_title)
+    plt.close(fig)
 
 
 def plot_annual_energy_mix(df):
