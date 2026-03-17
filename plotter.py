@@ -24,6 +24,7 @@ def color_palette():
     ]
     return color_palette, background_color
 
+<<<<<<< HEAD
 
 def save_plot(fig, fig_title, folder="plots"):
     os.makedirs(folder, exist_ok=True)
@@ -34,9 +35,13 @@ def save_plot(fig, fig_title, folder="plots"):
 
 
 def plot_dispatch(time_index, df, title):
+=======
+def plot_dispatch(time_index, df, load, title):
+>>>>>>> 805fc66078c5394998553eb763dcda99c31c5718
     colors, background_color = color_palette()
 
     fig, ax = plt.subplots(figsize=(10, 6))
+<<<<<<< HEAD
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
 
@@ -56,6 +61,22 @@ def plot_dispatch(time_index, df, title):
     ax.spines["right"].set_visible(False)
 
     fig_title = title.replace(" ", "_").lower()
+=======
+    ax.stackplot(time_index, 
+                 df['Wind Generator'], 
+                 df['Solar Generator'], 
+                 df['OCGT'], 
+                 df['Coal'],
+                 labels=['Wind Production [MWh]', 'PV Production [MWh]', 'Gas Production [MWh]', 'Coal Production [MWh]'],
+                 colors=[colors[13], colors[12], colors[14], colors[15]])
+    ax.plot(time_index, load, label='Load [MWh]', color='black', linewidth=2)
+    ax.set_xlabel('Time')
+    ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
+    ax.text(0.0, 1.03, 'Wind, Solar, Gas, and Coal Production in MWh', transform=ax.transAxes, fontsize=10, color='black', ha='left')
+    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+>>>>>>> 805fc66078c5394998553eb763dcda99c31c5718
     plt.tight_layout()
     print("About to save:", fig_title)
     save_plot(fig,fig_title)
