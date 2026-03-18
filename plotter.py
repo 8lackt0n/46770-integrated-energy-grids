@@ -47,43 +47,48 @@ def save_plot(file_name):
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
 
 
-def plot_dispatch(time_index, df, load, title, show=False, save=True):
+def plot_dispatch(time_index, df, load, title, show=False, save=True, power_axis_max=None, soc_axis_max=None):
     colors, background_color = color_palette()
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax1 = plt.subplots(figsize=(12, 4))
     fig.patch.set_facecolor(background_color)
-    ax.set_facecolor(background_color)
+    ax1.set_facecolor(background_color)
 
-    ax.set_xlabel("Time")
-    ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14,
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Power [MW]")
+
+    ax2 = ax1.twinx()
+    if soc_axis_max is not None:
+        ax2.set_ylim(0, 2*soc_axis_max)
+
+    ax1.text(0.0, 1.07, title, transform=ax1.transAxes, fontsize=14,
             color="black", ha="left", fontweight="bold")
     subtitle = "Wind, Solar, Gas, and Coal Production in MWh"
     if "Battery Storage Discharge" in df.columns:
-        subtitle = "Wind, Solar, Gas, Coal, and Battery Discharge in MWh"
+        subtitle = "Wind, Solar, Gas, Coal, and Battery Dynamics in MWh"
 
-    ax.text(0.0, 1.03, subtitle,
-            transform=ax.transAxes, fontsize=10, color="black", ha="left")
+    ax1.text(0.0, 1.03, subtitle,
+            transform=ax1.transAxes, fontsize=10, color="black", ha="left")
 
-    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc="upper center")
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
 
     dispatch_series = _dispatch_series(df)
     stack_values = [df[col] for col, _, _ in dispatch_series]
     stack_labels = [label for _, label, _ in dispatch_series]
     stack_colors = [color for _, _, color in dispatch_series]
 
-    ax.stackplot(time_index,
-                 *stack_values,
-                 labels=stack_labels,
-                 colors=stack_colors)
+    ax1.stackplot(time_index,
+                  *stack_values,
+                  labels=stack_labels,
+                  colors=stack_colors)
 
     total_generation = np.sum(np.vstack([np.asarray(values) for values in stack_values]), axis=0)
     load_values = np.asarray(load)
     charging_mask = total_generation > load_values
 
     if np.any(charging_mask):
-        ax.fill_between(
+        ax1.fill_between(
             time_index,
             load_values,
             total_generation,
@@ -96,17 +101,40 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True):
             zorder=2.5,
         )
 
-    ax.plot(time_index, load, label='Load [MWh]', color='black', linewidth=2)
-    ax.set_xlabel('Time')
-    ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
-    ax.text(0.0, 1.03, subtitle, transform=ax.transAxes, fontsize=10, color='black', ha='left')
-    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    if "Battery Storage SoC" in df.columns:
+        soc_values = np.asarray(df["Battery Storage SoC"])
+        ax2.plot(
+            time_index,
+            soc_values,
+            color=colors[1],
+            linewidth=1.8,
+            linestyle=":",
+            label="Battery State of Charge [MWh]",
+        )
+        ax2.set_ylabel("State of Charge [MWh]")
+
+    ax1.plot(time_index, load, label='Load [MWh]', color='black', linewidth=2)
+    if power_axis_max is not None:
+        ax1.set_ylim(0, power_axis_max)
+    ax1.set_xlabel('Time')
+    ax1.text(0.0, 1.07, title, transform=ax1.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
+    ax1.text(0.0, 1.03, subtitle, transform=ax1.transAxes, fontsize=10, color='black', ha='left')
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
+    ax1.spines['top'].set_visible(False)
+    ax1.spines['right'].set_visible(False)
+
+    # print df columns and head for debugging 2017-01-01 to 2017-01-02
+    print("Debugging DataFrame (2017-01-01 to 2017-01-02):")
+    print(df.loc['2017-01-01':'2017-01-02'])
+    print("DataFrame columns:", df.columns)
+    print("DataFrame head:")
+    print(df.head())
 
     if save:
         fig_title = title.replace(" ", "_").lower()
-        print("About to save:", fig_title)
+        print("Saving:", fig_title)
         save_plot(fig_title)
 
     if show:
@@ -130,7 +158,7 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
     labels = [label for _, label, _ in components]
     pie_colors = [color for _, _, color in components]
     
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(12, 4))
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
     ax.pie(values, labels=labels, colors=pie_colors, autopct='%1.1f%%')
@@ -146,7 +174,7 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
     
     if save:
         fig_title = title.replace(" ", "_").lower()
-        print("About to save:", fig_title)
+        print("Saving:", fig_title)
         save_plot(fig_title)
 
     if show:
@@ -166,7 +194,7 @@ def plot_duration_curve(df, title, show=False, save=True):
 
     hours = range(len(df))
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(12, 4))
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
 
@@ -197,7 +225,7 @@ def plot_duration_curve(df, title, show=False, save=True):
 
     if save:
         fig_title = title.replace(" ", "_").lower()
-        print("About to save:", fig_title)
+        print("Saving:", fig_title)
         save_plot(fig_title)
 
     if show:
@@ -210,7 +238,7 @@ def plot_capacity_variability(capacity_df, title, show=False, save=True):
     avg = capacity_df.mean()
     std = capacity_df.std()
 
-    fig, ax = plt.subplots(figsize=(10,6))
+    fig, ax = plt.subplots(figsize=(12, 4))
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
 
@@ -242,7 +270,7 @@ def plot_capacity_variability(capacity_df, title, show=False, save=True):
 
     if save:
         fig_title = title.replace(" ", "_").lower()
-        print("About to save:", fig_title)
+        print("Saving:", fig_title)
         save_plot(fig_title)
 
     if show:
@@ -252,7 +280,7 @@ def plot_capacity_variability(capacity_df, title, show=False, save=True):
 def plot_storage_operation(time_index, storage_df, title, show=False, save=True):
     colors, background_color = color_palette()
 
-    fig, ax1 = plt.subplots(figsize=(10, 6))
+    fig, ax1 = plt.subplots(figsize=(12, 4))
     fig.patch.set_facecolor(background_color)
     ax1.set_facecolor(background_color)
 
@@ -266,7 +294,7 @@ def plot_storage_operation(time_index, storage_df, title, show=False, save=True)
         time_index,
         storage_df["Battery Storage Charge"],
         label="Battery Charge [MWh]",
-        color=colors[1],
+        color=colors[9],
     )
     ax1.set_ylabel("Power [MW]")
 
@@ -292,7 +320,7 @@ def plot_storage_operation(time_index, storage_df, title, show=False, save=True)
 
     if save:
         fig_title = title.replace(" ", "_").lower()
-        print("About to save:", fig_title)
+        print("Saving:", fig_title)
         save_plot(fig_title)
 
     if show:

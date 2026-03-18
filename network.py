@@ -108,7 +108,8 @@ class Network():
                         marginal_cost=marginal_cost,
                         efficiency_store=efficiency_store,
                         efficiency_dispatch=efficiency_dispatch,
-                        max_hours=max_hours)
+                        max_hours=max_hours,
+                        cyclic_state_of_charge=True)
 
     def optimize_network(self):
         self.network.optimize(
@@ -123,11 +124,15 @@ class Network():
         dispatch = self.network.generators_t.p.copy()
 
         storage_data = None
+        battery_capacity = None
         if not self.network.storage_units.empty:
             storage_p = self.network.storage_units_t.p.copy()
             storage_soc = self.network.storage_units_t.state_of_charge.copy()
 
             storage_name = self.network.storage_units.index[0]
+            storage_power = float(self.network.storage_units.at[storage_name, "p_nom_opt"])
+            storage_hours = float(self.network.storage_units.at[storage_name, "max_hours"])
+            battery_capacity = storage_power * storage_hours
             dispatch["Battery Storage Discharge"] = storage_p[storage_name].clip(lower=0)
             dispatch["Battery Storage Charge"] = (-storage_p[storage_name].clip(upper=0))
             dispatch["Battery Storage SoC"] = storage_soc[storage_name]
@@ -147,7 +152,7 @@ class Network():
         #print("Optimal generation:")
         #print(dispatch)
 
-        return dispatch, capacities, storage_data
+        return dispatch, capacities, storage_data, battery_capacity
         
 
 if __name__ == "__main__":
@@ -177,17 +182,49 @@ if __name__ == "__main__":
         (True, "with storage"),
     ]
 
+    scenario_results = []
+
     for storage_enabled, scenario_label in scenarios:
         network = Network(load, wind_cf, solar_cf, hours)
         network.build_network(storage=storage_enabled)
         network.optimize_network()
-        dispatch, _, storage_data = network.display_results()
+        dispatch, _, storage_data, battery_capacity = network.display_results()
+
+        scenario_results.append(
+            {
+                "storage_enabled": storage_enabled,
+                "scenario_label": scenario_label,
+                "dispatch": dispatch,
+                "storage_data": storage_data,
+                "battery_capacity": battery_capacity,
+            }
+        )
+
+    power_max_candidates = [float(load.max())]
+    dispatch_power_columns = ["Wind Generator", "Solar Generator", "OCGT", "Coal", "Battery Storage Discharge"]
+
+    for result in scenario_results:
+        available_columns = [col for col in dispatch_power_columns if col in result["dispatch"].columns]
+        if available_columns:
+            total_power = result["dispatch"][available_columns].sum(axis=1)
+            power_max_candidates.append(float(total_power.max()))
+
+    shared_power_axis_max = max(power_max_candidates) * 1.05
+
+    for result in scenario_results:
+        storage_enabled = result["storage_enabled"]
+        scenario_label = result["scenario_label"]
+        dispatch = result["dispatch"]
+        storage_data = result["storage_data"]
+        battery_capacity = result["battery_capacity"]
 
         plot_dispatch(
             january_week,
             dispatch[january_week_mask],
             load[january_week_mask],
             f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
+            power_axis_max=shared_power_axis_max,
+            soc_axis_max=battery_capacity,
         )
 
         plot_dispatch(
@@ -195,6 +232,8 @@ if __name__ == "__main__":
             dispatch[july_week_mask],
             load[july_week_mask],
             f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
+            power_axis_max=shared_power_axis_max,
+            soc_axis_max=battery_capacity,
         )
 
         plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 ({scenario_label})")
