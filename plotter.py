@@ -24,24 +24,17 @@ def color_palette():
     ]
     return color_palette, background_color
 
-<<<<<<< HEAD
 
-def save_plot(fig, fig_title, folder="plots"):
-    os.makedirs(folder, exist_ok=True)
-    filepath = os.path.abspath(os.path.join(folder, f"{fig_title}.png"))
-    print("Saving to:", filepath)
-    fig.savefig(filepath, dpi=300, bbox_inches="tight")
-    print(f"Saved plot to: {filepath}")
+def save_plot(file_name):
+    os.makedirs("plots", exist_ok=True)
+    output_path = os.path.join("plots", f"{file_name}.png")
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
 
 
-def plot_dispatch(time_index, df, title):
-=======
 def plot_dispatch(time_index, df, load, title):
->>>>>>> 805fc66078c5394998553eb763dcda99c31c5718
     colors, background_color = color_palette()
 
     fig, ax = plt.subplots(figsize=(10, 6))
-<<<<<<< HEAD
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
 
@@ -60,8 +53,6 @@ def plot_dispatch(time_index, df, load, title):
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
-    fig_title = title.replace(" ", "_").lower()
-=======
     ax.stackplot(time_index, 
                  df['Wind Generator'], 
                  df['Solar Generator'], 
@@ -76,32 +67,37 @@ def plot_dispatch(time_index, df, load, title):
     ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
->>>>>>> 805fc66078c5394998553eb763dcda99c31c5718
-    plt.tight_layout()
+
+    fig_title = title.replace(" ", "_").lower()
     print("About to save:", fig_title)
-    save_plot(fig,fig_title)
+    save_plot(fig_title)
     plt.close(fig)
 
 
-def plot_annual_energy_mix(df):
+def plot_annual_energy_mix(df, title):
     colors, background_color = color_palette()
-    
+
     tot_wind = sum(df["Wind Generator"])
     tot_solar = sum(df["Solar Generator"])
     tot_gas = sum(df["OCGT"])
     tot_coal = sum(df["Coal"])
     
     fig, ax = plt.subplots(figsize=(10, 6))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
     ax.pie([tot_wind, tot_solar, tot_gas, tot_coal], labels=['Wind', 'Solar', 'Gas', 'Coal'], colors=[colors[13], colors[12], colors[14], colors[15]], autopct='%1.1f%%')
-    ax.text(0.0, 1.07, 'Annual Energy Mix', transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
+    ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
     ax.text(0.0, 1.03, 'Total Wind, Solar, Gas, and Coal Production in MWh', transform=ax.transAxes, fontsize=10, color='black', ha='left')
     ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    plt.tight_layout()
-    plt.show()
+    
+    fig_title = title.replace(" ", "_").lower()
+    print("About to save:", fig_title)
+    save_plot(fig_title)
+    plt.close(fig)
 
-def plot_duration_curve(df):
+def plot_duration_curve(df, title):
     colors, background_color = color_palette()
 
     wind_sorted = df["Wind Generator"].sort_values(ascending=False).reset_index(drop=True)
@@ -112,6 +108,8 @@ def plot_duration_curve(df):
     hours = range(len(df))
 
     fig, ax = plt.subplots(figsize=(10, 6))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
 
     ax.plot(hours, wind_sorted, label="Wind", color=colors[13])
     ax.plot(hours, solar_sorted, label="Solar", color=colors[12])
@@ -139,10 +137,12 @@ def plot_duration_curve(df):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    plt.tight_layout()
-    plt.show()
+    fig_title = title.replace(" ", "_").lower()
+    print("About to save:", fig_title)
+    save_plot(fig_title)
+    plt.close(fig)
 
-def plot_capacity_variability(capacity_df):
+def plot_capacity_variability(capacity_df, title):
 
     colors, background_color = color_palette()
 
@@ -150,6 +150,8 @@ def plot_capacity_variability(capacity_df):
     std = capacity_df.std()
 
     fig, ax = plt.subplots(figsize=(10,6))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
 
     ax.bar(
         avg.index,
@@ -162,7 +164,7 @@ def plot_capacity_variability(capacity_df):
     ax.set_ylabel("Installed Capacity [MW]")
 
     ax.text(0.0, 1.07,
-        "Average Generator Capacity with Weather Variability",
+        title,
         transform=ax.transAxes,
         fontsize=14,
         fontweight="bold"
@@ -177,8 +179,8 @@ def plot_capacity_variability(capacity_df):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    plt.tight_layout()
-    plt.show()
+    fig_title = title.replace(" ", "_").lower()
+    print("About to save:", fig_title)
+    save_plot(fig_title)
+    plt.close(fig)
 
-def save_plot(file_name):
-    plt.savefig(file_name, dpi=300, bbox_inches='tight', folder='plots')

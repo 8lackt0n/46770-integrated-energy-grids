@@ -31,4 +31,4 @@ capacity_df = pd.DataFrame(capacity_results, index=years)
 
 avg_capacity = capacity_df.mean()
 std_capacity = capacity_df.std()
-plot_capacity_variability(capacity_df)
+plot_capacity_variability(capacity_df, "Average Generator Capacity with Weather Variability")
