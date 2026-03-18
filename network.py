@@ -1,6 +1,6 @@
 import pandas as pd
 from data_loader import load_data
-from helper import annuity
+from helper import annuity, annualize
 import pypsa
 import gurobipy
 import matplotlib.pyplot as plt
@@ -37,8 +37,12 @@ class Network():
         self.network.add("Carrier", "Gas", co2_emissions=0.19)
         self.network.add("Carrier", "Coal", co2_emissions=1.0)
 
+        #TODO: Check numbers and find sources
         # Add network generators
-        capital_cost_wind = annuity(30,0.07)*910000*(1+0.033) # in €/MW
+        
+        # Onshore Wind
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_wind = annuity(30,0.07)*910_000*(1+0.033) # in €/MW
         self.network.add("Generator", 
                     "Wind Generator", 
                     p_nom_extendable=True,
@@ -46,8 +50,10 @@ class Network():
                     carrier="Wind", 
                     capital_cost = capital_cost_wind,
                     p_max_pu=self.wind_cf.values)
-
-        capital_cost_solar = annuity(25,0.07)*425000*(1+0.03) # in €/MW
+        
+        # PV
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_solar = annuity(25,0.07)*425_000*(1+0.03) # in €/MW
         self.network.add("Generator", 
                     "Solar Generator", 
                     p_nom_extendable=True,
@@ -55,8 +61,10 @@ class Network():
                     carrier="Solar", 
                     capital_cost = capital_cost_solar,
                     p_max_pu=self.solar_cf.values)
-
-        capital_cost_OCGT = annuity(25,0.07)*560000*(1+0.033) # in €/MW
+        
+        # OCGT Power Plant
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_OCGT = annuity(25,0.07)*560_000*(1+0.033) # in €/MW
         fuel_cost = 21.6 # in €/MWh_th
         efficiency = 0.39 # MWh_elec/MWh_th
         marginal_cost_OCGT = fuel_cost/efficiency # in €/MWh_el
@@ -67,9 +75,12 @@ class Network():
                     carrier="Gas",
                     capital_cost = capital_cost_OCGT,
                     marginal_cost = marginal_cost_OCGT)
-
-        capital_cost_coal = annuity(25,0.07)*3711000*(1+0.033) # in €/MW
-        fuel_cost_coal = 15.0 # in €/MWh_th
+        
+        # Ignite Fired Power Plant
+        # https://www.econstor.eu/handle/10419/80348
+        over_night_cost_IFPP = annualize(1_400_000, 2012, 2017) # in €/MW
+        capital_cost_coal = annuity(25,0.07)*over_night_cost_IFPP*(1+0.033) # in €/MW
+        fuel_cost_coal = 12.6 # in €/MWh_th, source: https://ourworldindata.org/grapher/coal-prices
         efficiency_coal = 0.35 # MWh_elec/MWh_th
         marginal_cost_coal = fuel_cost_coal/efficiency_coal # in €/MWh_el
         
@@ -88,8 +99,10 @@ class Network():
 
     
     def add_storage(self):
-        #just some random numbers for now
-        capital_cost = annuity(20, 0.07) * 200000 
+        #TODO: Check numbers and find sources
+        # https://www.sciencedirect.com/science/article/pii/S0378775312014759?via%3Dihub
+        over_night_cost_battery = annualize(609_000, 2008, 2017) # in €/MW
+        capital_cost = annuity(15, 0.07) * over_night_cost_battery * (1 + 0.033) # in €/MW
         marginal_cost = 0.0
 
         efficiency_store = 0.9
