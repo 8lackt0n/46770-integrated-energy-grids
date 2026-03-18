@@ -38,10 +38,10 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True):
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
 
-    ax.step(time_index, df["Wind Generator"], label="Wind Production [MWh]", color=colors[13])
-    ax.step(time_index, df["Solar Generator"], label="PV Production [MWh]", color=colors[12])
-    ax.step(time_index, df["OCGT"], label="Gas Production [MWh]", color=colors[14])
-    ax.step(time_index, df["Coal"], label="Coal Production [MWh]", color=colors[15])
+    #ax.step(time_index, df["Wind Generator"], label="Wind Production [MWh]", color=colors[13])
+    #ax.step(time_index, df["Solar Generator"], label="PV Production [MWh]", color=colors[12])
+    #ax.step(time_index, df["OCGT"], label="Gas Production [MWh]", color=colors[14])
+    #ax.step(time_index, df["Coal"], label="Coal Production [MWh]", color=colors[15])
 
     ax.set_xlabel("Time")
     ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14,
