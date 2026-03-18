@@ -16,7 +16,7 @@ class Network():
         self.solar_cf = solar_cf
         self.hours = hours
     
-    def build_network(self):
+    def build_network(self, storage=False):
         
 
         # Set snapshot times
@@ -81,7 +81,31 @@ class Network():
                     capital_cost = capital_cost_coal,
                     marginal_cost = marginal_cost_coal)
         
+        if storage:
+            self.add_storage()
+        
         self.network.sanitize()
+
+    
+    def add_storage(self):
+        #just some random numbers for now
+        capital_cost = annuity(20, 0.07) * 200000 
+        marginal_cost = 0.0
+
+        efficiency_store = 0.9
+        efficiency_dispatch = 0.9
+
+        max_hours = 6  # energy capacity = power * hours
+
+        self.network.add("StorageUnit",
+                        "Battery Storage",
+                        bus="Electricity Bus",
+                        p_nom_extendable=True,
+                        capital_cost=capital_cost,
+                        marginal_cost=marginal_cost,
+                        efficiency_store=efficiency_store,
+                        efficiency_dispatch=efficiency_dispatch,
+                        max_hours=max_hours)
 
     def optimize_network(self):
         self.network.optimize(
@@ -121,7 +145,7 @@ if __name__ == "__main__":
     ### BUILD NETWORK ###
     
     network = Network(load, wind_cf, solar_cf, hours)
-    network.build_network()
+    network.build_network(storage=True)
     network.optimize_network()
     dispatch, _ = network.display_results()
     
@@ -132,15 +156,15 @@ if __name__ == "__main__":
     january_week = hours[january_week_mask]
     jan_dispatch = 'Optimal Hourly Dispatch for One Week in January, 2017'
 
-    plot_dispatch(january_week, dispatch[january_week_mask], load[january_week_mask], jan_dispatch, save_as='jan_dispatch')
+    plot_dispatch(january_week, dispatch[january_week_mask], load[january_week_mask], jan_dispatch, save_as='jan_dispatch_storage')
     
     # Plot one week in July
     july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
     july_week = hours[july_week_mask]
     july_dispatch = 'Optimal Hourly Dispatch for One Week in July, 2017'
 
-    plot_dispatch(july_week, dispatch[july_week_mask], load[july_week_mask], july_dispatch, save_as="july_dispatch")
+    plot_dispatch(july_week, dispatch[july_week_mask], load[july_week_mask], july_dispatch, save_as="july_dispatch_storage")
     
-    plot_annual_energy_mix(dispatch, save_as = 'annual_mix')
+    plot_annual_energy_mix(dispatch, save_as = 'annual_mix_storage')
 
-    plot_duration_curve(dispatch, save_as= 'duration_curve')
+    plot_duration_curve(dispatch, save_as= 'duration_curve_storage')
