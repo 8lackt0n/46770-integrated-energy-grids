@@ -16,7 +16,7 @@ class Network():
         self.solar_cf = solar_cf
         self.hours = hours
     
-    def build_network(self):
+    def build_network(self, storage=False):
         
 
         # Set snapshot times
@@ -81,7 +81,31 @@ class Network():
                     capital_cost = capital_cost_coal,
                     marginal_cost = marginal_cost_coal)
         
+        if storage:
+            self.add_storage()
+        
         self.network.sanitize()
+
+    
+    def add_storage(self):
+        #just some random numbers for now
+        capital_cost = annuity(20, 0.07) * 200000 
+        marginal_cost = 0.0
+
+        efficiency_store = 0.9
+        efficiency_dispatch = 0.9
+
+        max_hours = 6  # energy capacity = power * hours
+
+        self.network.add("StorageUnit",
+                        "Battery Storage",
+                        bus="Electricity Bus",
+                        p_nom_extendable=True,
+                        capital_cost=capital_cost,
+                        marginal_cost=marginal_cost,
+                        efficiency_store=efficiency_store,
+                        efficiency_dispatch=efficiency_dispatch,
+                        max_hours=max_hours)
 
     def optimize_network(self):
         self.network.optimize(
@@ -121,7 +145,7 @@ if __name__ == "__main__":
     ### BUILD NETWORK ###
     
     network = Network(load, wind_cf, solar_cf, hours)
-    network.build_network()
+    network.build_network(storage=True)
     network.optimize_network()
     dispatch, _ = network.display_results()
     
