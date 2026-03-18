@@ -21,7 +21,7 @@ for year in years:
     network.build_network()
     network.optimize_network()
 
-    _, capacities = network.display_results()
+    _, capacities, _ = network.display_results()
 
     capacity_results.append(capacities)
 

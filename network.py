@@ -19,15 +19,18 @@ class Network():
     def build_network(self, storage=False):
         
 
-        # Set snapshot times
-        self.network.set_snapshots(self.hours.values)
+        # PyPSA requires timezone-naive snapshots.
+        snapshots = pd.DatetimeIndex(self.hours)
+        if snapshots.tz is not None:
+            snapshots = snapshots.tz_localize(None)
+        self.network.set_snapshots(snapshots)
         # Add a bus
-        self.network.add("Bus", "Electricity Bus")
+        self.network.add("Bus", "Estonia")
 
         # Add a load
         self.network.add("Load", 
-                    "Electricity Load",
-                    bus="Electricity Bus", 
+                    "Estonia_Load",
+                    bus="Estonia", 
                     p_set=self.load.values)
         self.network.loads_t.p_set
 
@@ -46,7 +49,7 @@ class Network():
         self.network.add("Generator", 
                     "Wind Generator", 
                     p_nom_extendable=True,
-                    bus="Electricity Bus", 
+                    bus="Estonia", 
                     carrier="Wind", 
                     capital_cost = capital_cost_wind,
                     p_max_pu=self.wind_cf.values)
@@ -57,7 +60,7 @@ class Network():
         self.network.add("Generator", 
                     "Solar Generator", 
                     p_nom_extendable=True,
-                    bus="Electricity Bus", 
+                    bus="Estonia", 
                     carrier="Solar", 
                     capital_cost = capital_cost_solar,
                     p_max_pu=self.solar_cf.values)
@@ -70,7 +73,7 @@ class Network():
         marginal_cost_OCGT = fuel_cost/efficiency # in €/MWh_el
         self.network.add("Generator",
                     "OCGT",
-                    bus="Electricity Bus",
+                    bus="Estonia",
                     p_nom_extendable=True,
                     carrier="Gas",
                     capital_cost = capital_cost_OCGT,
@@ -86,7 +89,7 @@ class Network():
         
         self.network.add("Generator",
                     "Coal",
-                    bus="Electricity Bus",
+                    bus="Estonia",
                     p_nom_extendable=True,
                     carrier="Coal",
                     capital_cost = capital_cost_coal,
@@ -112,13 +115,71 @@ class Network():
 
         self.network.add("StorageUnit",
                         "Battery Storage",
-                        bus="Electricity Bus",
+                        bus="Estonia",
                         p_nom_extendable=True,
                         capital_cost=capital_cost,
                         marginal_cost=marginal_cost,
                         efficiency_store=efficiency_store,
                         efficiency_dispatch=efficiency_dispatch,
                         max_hours=max_hours)
+        
+    def add_transmission(self):
+
+    
+        # Fenno-Skan 1+2 (Sweden-Finland ) (500+800 = 1200 MW) 400 kV (1989 and 2011)
+        # Estlink 1+2 (Estonia-Finland) (350+650 = 1000 MW) 330 kV (Estonia) and 400 kV (finland) (2006 and 2014)
+        # Theortical Estonia-Sweden (700? MW) Would likely be similar, 330 kV Estonia and 400 kV Sweden 
+        # Estonia Latvia interconnection (1400 MW or 800 MW, depending on how new) 330 kV (1970ish, 1970ish, 2020 (1 and 2 were reconstructed 2023/2024))
+        for b in ["Estonia", "Finland", "Sweden", "Latvia"]:
+            if b not in self.network.buses.index:
+                self.network.add("Bus", b, v_nom=400)
+
+        cap_fin_swe = 1200.0   # Fenno-Skan 1+2 (500 + 800)
+        cap_est_fin = 1000.0   # Estlink 1+2 (350 + 650)
+        cap_est_swe = 700.0    # Theoretical Estonia-Sweden
+        cap_est_lat = 1400.0   # Estonia-Latvia interconnection (using latest estimate)
+
+        x = 0.1                 # unitary reactance
+        v = 400                 # nominal voltage kV 
+        extendable = False      # fixed capacities
+
+        self.network.add("Line",
+                        "FIN-SWE",
+                        bus0="Finland",
+                        bus1="Sweden",
+                        s_nom=cap_fin_swe,
+                        s_nom_extendable=extendable,
+                        x=x,
+                        v_nom=v)
+
+        self.network.add("Line",
+                        "EST-FIN",
+                        bus0="Estonia",
+                        bus1="Finland",
+                        s_nom=cap_est_fin,
+                        s_nom_extendable=extendable,
+                        x=x,
+                        v_nom=v)
+
+        self.network.add("Line",
+                        "EST-SWE",
+                        bus0="Estonia",
+                        bus1="Sweden",
+                        s_nom=cap_est_swe,
+                        s_nom_extendable=extendable,
+                        x=x,
+                        v_nom=v)
+
+        self.network.add("Line",
+                        "EST-LAT",
+                        bus0="Estonia",
+                        bus1="Latvia",
+                        s_nom=cap_est_lat,
+                        s_nom_extendable=extendable,
+                        x=x,
+                        v_nom=v)
+
+    # also need the system and loads for the latvia, finland, sweden
 
     def optimize_network(self):
         self.network.optimize(
@@ -130,7 +191,26 @@ class Network():
     def display_results(self):
 
         capacities = self.network.generators.p_nom_opt
-        dispatch = self.network.generators_t.p
+        dispatch = self.network.generators_t.p.copy()
+
+        storage_data = None
+        if not self.network.storage_units.empty:
+            storage_p = self.network.storage_units_t.p.copy()
+            storage_soc = self.network.storage_units_t.state_of_charge.copy()
+
+            storage_name = self.network.storage_units.index[0]
+            dispatch["Battery Storage Discharge"] = storage_p[storage_name].clip(lower=0)
+            dispatch["Battery Storage Charge"] = (-storage_p[storage_name].clip(upper=0))
+            dispatch["Battery Storage SoC"] = storage_soc[storage_name]
+
+            storage_data = pd.DataFrame(
+                {
+                    "Battery Storage Discharge": dispatch["Battery Storage Discharge"],
+                    "Battery Storage Charge": dispatch["Battery Storage Charge"],
+                    "Battery Storage SoC": dispatch["Battery Storage SoC"],
+                },
+                index=dispatch.index,
+            )
 
         #print("Optimal capacities:")
         #print(capacities)
@@ -138,7 +218,7 @@ class Network():
         #print("Optimal generation:")
         #print(dispatch)
 
-        return dispatch, capacities
+        return dispatch, capacities, storage_data
         
 
 if __name__ == "__main__":
@@ -151,31 +231,59 @@ if __name__ == "__main__":
     print(f"Load series length: {len(load)}")
     print(f"Wind CF series length: {len(wind_cf)}")
     print(f"Solar CF series length: {len(solar_cf)}")
-    hours = pd.date_range('2017-01-01 00:00Z',
-                                '2017-12-31 23:00Z',
+    hours = pd.date_range('2017-01-01 00:00',
+                                '2017-12-31 23:00',
                                 freq='h')
     
     ### BUILD NETWORK ###
     
-    network = Network(load, wind_cf, solar_cf, hours)
-    network.build_network(storage=False)
-    network.optimize_network()
-    dispatch, _ = network.display_results()
-    
-    ### PLOTS ###
-    
-    # Plot one week in January
     january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
     january_week = hours[january_week_mask]
-    
-    plot_dispatch(january_week, dispatch[january_week_mask], load[january_week_mask], 'Optimal Hourly Dispatch for One Week in January 2017')
-    
-    # Plot one week in July
+
     july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
     july_week = hours[july_week_mask]
-    
-    plot_dispatch(july_week, dispatch[july_week_mask], load[july_week_mask], 'Optimal Hourly Dispatch for One Week in July 2017')
-    
-    plot_annual_energy_mix(dispatch, 'Annual Energy Mix for 2017')
 
-    plot_duration_curve(dispatch, 'Duration Curve for 2017')
+    scenarios = [
+        (False, "without storage"),
+        (True, "with storage"),
+    ]
+
+    for storage_enabled, scenario_label in scenarios:
+        network = Network(load, wind_cf, solar_cf, hours)
+        network.build_network(storage=storage_enabled)
+        network.optimize_network()
+        dispatch, _, storage_data = network.display_results()
+
+        plot_dispatch(
+            january_week,
+            dispatch[january_week_mask],
+            load[january_week_mask],
+            f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
+        )
+
+        plot_dispatch(
+            july_week,
+            dispatch[july_week_mask],
+            load[july_week_mask],
+            f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
+        )
+
+        plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 ({scenario_label})")
+        plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
+
+        if storage_data is not None:
+            plot_storage_operation(
+                january_week,
+                storage_data[january_week_mask],
+                f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
+            )
+            plot_storage_operation(
+                july_week,
+                storage_data[july_week_mask],
+                f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
+            )
+
+    
+
+
+
