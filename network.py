@@ -19,8 +19,11 @@ class Network():
     def build_network(self, storage=False):
         
 
-        # Set snapshot times
-        self.network.set_snapshots(self.hours.values)
+        # PyPSA requires timezone-naive snapshots.
+        snapshots = pd.DatetimeIndex(self.hours)
+        if snapshots.tz is not None:
+            snapshots = snapshots.tz_localize(None)
+        self.network.set_snapshots(snapshots)
         # Add a bus
         self.network.add("Bus", "Electricity Bus")
 
@@ -117,7 +120,26 @@ class Network():
     def display_results(self):
 
         capacities = self.network.generators.p_nom_opt
-        dispatch = self.network.generators_t.p
+        dispatch = self.network.generators_t.p.copy()
+
+        storage_data = None
+        if not self.network.storage_units.empty:
+            storage_p = self.network.storage_units_t.p.copy()
+            storage_soc = self.network.storage_units_t.state_of_charge.copy()
+
+            storage_name = self.network.storage_units.index[0]
+            dispatch["Battery Storage Discharge"] = storage_p[storage_name].clip(lower=0)
+            dispatch["Battery Storage Charge"] = (-storage_p[storage_name].clip(upper=0))
+            dispatch["Battery Storage SoC"] = storage_soc[storage_name]
+
+            storage_data = pd.DataFrame(
+                {
+                    "Battery Storage Discharge": dispatch["Battery Storage Discharge"],
+                    "Battery Storage Charge": dispatch["Battery Storage Charge"],
+                    "Battery Storage SoC": dispatch["Battery Storage SoC"],
+                },
+                index=dispatch.index,
+            )
 
         #print("Optimal capacities:")
         #print(capacities)
@@ -125,7 +147,7 @@ class Network():
         #print("Optimal generation:")
         #print(dispatch)
 
-        return dispatch, capacities
+        return dispatch, capacities, storage_data
         
 
 if __name__ == "__main__":
@@ -138,31 +160,59 @@ if __name__ == "__main__":
     print(f"Load series length: {len(load)}")
     print(f"Wind CF series length: {len(wind_cf)}")
     print(f"Solar CF series length: {len(solar_cf)}")
-    hours = pd.date_range('2017-01-01 00:00Z',
-                                '2017-12-31 23:00Z',
+    hours = pd.date_range('2017-01-01 00:00',
+                                '2017-12-31 23:00',
                                 freq='h')
     
     ### BUILD NETWORK ###
     
-    network = Network(load, wind_cf, solar_cf, hours)
-    network.build_network(storage=False)
-    network.optimize_network()
-    dispatch, _ = network.display_results()
-    
-    ### PLOTS ###
-    
-    # Plot one week in January
     january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
     january_week = hours[january_week_mask]
-    
-    plot_dispatch(january_week, dispatch[january_week_mask], load[january_week_mask], 'Optimal Hourly Dispatch for One Week in January 2017')
-    
-    # Plot one week in July
+
     july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
     july_week = hours[july_week_mask]
-    
-    plot_dispatch(july_week, dispatch[july_week_mask], load[july_week_mask], 'Optimal Hourly Dispatch for One Week in July 2017')
-    
-    plot_annual_energy_mix(dispatch, 'Annual Energy Mix for 2017')
 
-    plot_duration_curve(dispatch, 'Duration Curve for 2017')
+    scenarios = [
+        (False, "without storage"),
+        (True, "with storage"),
+    ]
+
+    for storage_enabled, scenario_label in scenarios:
+        network = Network(load, wind_cf, solar_cf, hours)
+        network.build_network(storage=storage_enabled)
+        network.optimize_network()
+        dispatch, _, storage_data = network.display_results()
+
+        plot_dispatch(
+            january_week,
+            dispatch[january_week_mask],
+            load[january_week_mask],
+            f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
+        )
+
+        plot_dispatch(
+            july_week,
+            dispatch[july_week_mask],
+            load[july_week_mask],
+            f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
+        )
+
+        plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 ({scenario_label})")
+        plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
+
+        if storage_data is not None:
+            plot_storage_operation(
+                january_week,
+                storage_data[january_week_mask],
+                f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
+            )
+            plot_storage_operation(
+                july_week,
+                storage_data[july_week_mask],
+                f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
+            )
+
+    
+
+
+
