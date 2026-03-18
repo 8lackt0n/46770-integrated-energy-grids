@@ -31,7 +31,7 @@ def save_plot(file_name):
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
 
 
-def plot_dispatch(time_index, df, load, title):
+def plot_dispatch(time_index, df, load, title, show=False, save=True):
     colors, background_color = color_palette()
 
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -68,13 +68,17 @@ def plot_dispatch(time_index, df, load, title):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    fig_title = title.replace(" ", "_").lower()
-    print("About to save:", fig_title)
-    save_plot(fig_title)
-    plt.close(fig)
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("About to save:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+    #plt.close(fig)
 
 
-def plot_annual_energy_mix(df, title):
+def plot_annual_energy_mix(df, title, show=False, save=True):
     colors, background_color = color_palette()
 
     tot_wind = sum(df["Wind Generator"])
@@ -92,12 +96,15 @@ def plot_annual_energy_mix(df, title):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     
-    fig_title = title.replace(" ", "_").lower()
-    print("About to save:", fig_title)
-    save_plot(fig_title)
-    plt.close(fig)
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("About to save:", fig_title)
+        save_plot(fig_title)
 
-def plot_duration_curve(df, title):
+    if show:
+        plt.show()
+
+def plot_duration_curve(df, title, show=False, save=True):
     colors, background_color = color_palette()
 
     wind_sorted = df["Wind Generator"].sort_values(ascending=False).reset_index(drop=True)
@@ -137,12 +144,15 @@ def plot_duration_curve(df, title):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    fig_title = title.replace(" ", "_").lower()
-    print("About to save:", fig_title)
-    save_plot(fig_title)
-    plt.close(fig)
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("About to save:", fig_title)
+        save_plot(fig_title)
 
-def plot_capacity_variability(capacity_df, title):
+    if show:
+        plt.show()
+
+def plot_capacity_variability(capacity_df, title, show=False, save=True):
 
     colors, background_color = color_palette()
 
@@ -179,8 +189,11 @@ def plot_capacity_variability(capacity_df, title):
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    fig_title = title.replace(" ", "_").lower()
-    print("About to save:", fig_title)
-    save_plot(fig_title)
-    plt.close(fig)
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("About to save:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
 

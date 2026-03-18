@@ -145,7 +145,7 @@ if __name__ == "__main__":
     ### BUILD NETWORK ###
     
     network = Network(load, wind_cf, solar_cf, hours)
-    network.build_network(storage=True)
+    network.build_network(storage=False)
     network.optimize_network()
     dispatch, _ = network.display_results()
     
