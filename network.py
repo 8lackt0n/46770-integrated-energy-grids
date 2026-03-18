@@ -130,15 +130,17 @@ if __name__ == "__main__":
     # Plot one week in January
     january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
     january_week = hours[january_week_mask]
-    
-    plot_dispatch(january_week, dispatch[january_week_mask], load[january_week_mask], 'Optimal Hourly Dispatch for One Week in January, 2017')
+    jan_dispatch = 'Optimal Hourly Dispatch for One Week in January, 2017'
+
+    plot_dispatch(january_week, dispatch[january_week_mask], load[january_week_mask], jan_dispatch, save_as='jan_dispatch')
     
     # Plot one week in July
     july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
     july_week = hours[july_week_mask]
-    
-    plot_dispatch(july_week, dispatch[july_week_mask], load[july_week_mask], 'Optimal Hourly Dispatch for One Week in July, 2017')
-    
-    plot_annual_energy_mix(dispatch)
+    july_dispatch = 'Optimal Hourly Dispatch for One Week in July, 2017'
 
-    plot_duration_curve(dispatch)
+    plot_dispatch(july_week, dispatch[july_week_mask], load[july_week_mask], july_dispatch, save_as="july_dispatch")
+    
+    plot_annual_energy_mix(dispatch, save_as = 'annual_mix')
+
+    plot_duration_curve(dispatch, save_as= 'duration_curve')
