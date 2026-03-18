@@ -25,12 +25,12 @@ class Network():
             snapshots = snapshots.tz_localize(None)
         self.network.set_snapshots(snapshots)
         # Add a bus
-        self.network.add("Bus", "Electricity Bus")
+        self.network.add("Bus", "Estonia")
 
         # Add a load
         self.network.add("Load", 
-                    "Electricity Load",
-                    bus="Electricity Bus", 
+                    "Estonia_Load",
+                    bus="Estonia", 
                     p_set=self.load.values)
         self.network.loads_t.p_set
 
@@ -45,7 +45,7 @@ class Network():
         self.network.add("Generator", 
                     "Wind Generator", 
                     p_nom_extendable=True,
-                    bus="Electricity Bus", 
+                    bus="Estonia", 
                     carrier="Wind", 
                     capital_cost = capital_cost_wind,
                     p_max_pu=self.wind_cf.values)
@@ -54,7 +54,7 @@ class Network():
         self.network.add("Generator", 
                     "Solar Generator", 
                     p_nom_extendable=True,
-                    bus="Electricity Bus", 
+                    bus="Estonia", 
                     carrier="Solar", 
                     capital_cost = capital_cost_solar,
                     p_max_pu=self.solar_cf.values)
@@ -65,7 +65,7 @@ class Network():
         marginal_cost_OCGT = fuel_cost/efficiency # in €/MWh_el
         self.network.add("Generator",
                     "OCGT",
-                    bus="Electricity Bus",
+                    bus="Estonia",
                     p_nom_extendable=True,
                     carrier="Gas",
                     capital_cost = capital_cost_OCGT,
@@ -78,7 +78,7 @@ class Network():
         
         self.network.add("Generator",
                     "Coal",
-                    bus="Electricity Bus",
+                    bus="Estonia",
                     p_nom_extendable=True,
                     carrier="Coal",
                     capital_cost = capital_cost_coal,
@@ -102,13 +102,71 @@ class Network():
 
         self.network.add("StorageUnit",
                         "Battery Storage",
-                        bus="Electricity Bus",
+                        bus="Estonia",
                         p_nom_extendable=True,
                         capital_cost=capital_cost,
                         marginal_cost=marginal_cost,
                         efficiency_store=efficiency_store,
                         efficiency_dispatch=efficiency_dispatch,
                         max_hours=max_hours)
+        
+    def add_transmission(self):
+
+    
+        # Fenno-Skan 1+2 (Sweden-Finland ) (500+800 = 1200 MW) 400 kV (1989 and 2011)
+        # Estlink 1+2 (Estonia-Finland) (350+650 = 1000 MW) 330 kV (Estonia) and 400 kV (finland) (2006 and 2014)
+        # Theortical Estonia-Sweden (700? MW) Would likely be similar, 330 kV Estonia and 400 kV Sweden 
+        # Estonia Latvia interconnection (1400 MW or 800 MW, depending on how new) 330 kV (1970ish, 1970ish, 2020 (1 and 2 were reconstructed 2023/2024))
+        for b in ["Estonia", "Finland", "Sweden", "Latvia"]:
+            if b not in self.network.buses.index:
+                self.network.add("Bus", b, v_nom=400)
+
+        cap_fin_swe = 1200.0   # Fenno-Skan 1+2 (500 + 800)
+        cap_est_fin = 1000.0   # Estlink 1+2 (350 + 650)
+        cap_est_swe = 700.0    # Theoretical Estonia-Sweden
+        cap_est_lat = 1400.0   # Estonia-Latvia interconnection (using latest estimate)
+
+        x = 0.1                 # unitary reactance
+        v = 400                 # nominal voltage kV 
+        extendable = False      # fixed capacities
+
+        self.network.add("Line",
+                        "FIN-SWE",
+                        bus0="Finland",
+                        bus1="Sweden",
+                        s_nom=cap_fin_swe,
+                        s_nom_extendable=extendable,
+                        x=x,
+                        v_nom=v)
+
+        self.network.add("Line",
+                        "EST-FIN",
+                        bus0="Estonia",
+                        bus1="Finland",
+                        s_nom=cap_est_fin,
+                        s_nom_extendable=extendable,
+                        x=x,
+                        v_nom=v)
+
+        self.network.add("Line",
+                        "EST-SWE",
+                        bus0="Estonia",
+                        bus1="Sweden",
+                        s_nom=cap_est_swe,
+                        s_nom_extendable=extendable,
+                        x=x,
+                        v_nom=v)
+
+        self.network.add("Line",
+                        "EST-LAT",
+                        bus0="Estonia",
+                        bus1="Latvia",
+                        s_nom=cap_est_lat,
+                        s_nom_extendable=extendable,
+                        x=x,
+                        v_nom=v)
+
+    # also need the system and loads for the latvia, finland, sweden
 
     def optimize_network(self):
         self.network.optimize(
