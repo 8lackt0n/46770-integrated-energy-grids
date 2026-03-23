@@ -2,8 +2,6 @@ import pandas as pd
 from data_loader import load_data
 from helper import annuity, annualize
 import pypsa
-import gurobipy
-import matplotlib.pyplot as plt
 from plotter import *
 #---------------------------------------------------
 ### PYPSA NETWORK ###
@@ -16,8 +14,7 @@ class Network():
         self.solar_cf = solar_cf
         self.hours = hours
     
-    def build_network(self, storage=False):
-        
+    def build_network(self, storage=False, transmission=False, external=False):
 
         # PyPSA requires timezone-naive snapshots.
         snapshots = pd.DatetimeIndex(self.hours)
@@ -31,7 +28,7 @@ class Network():
         self.network.add("Load", 
                     "Estonia_Load",
                     bus="Estonia", 
-                    p_set=self.load.values)
+                    p_set=self.load['EE'].values)
         self.network.loads_t.p_set
 
         # Add network carriers
@@ -39,8 +36,9 @@ class Network():
         self.network.add("Carrier", "Solar")
         self.network.add("Carrier", "Gas", co2_emissions=0.19)
         self.network.add("Carrier", "Coal", co2_emissions=1.0)
+        self.network.add("Carrier", "Nuclear")
+        self.network.add("Carrier", "Hydro")
 
-        #TODO: Check numbers and find sources
         # Add network generators
         
         # Onshore Wind
@@ -52,7 +50,7 @@ class Network():
                     bus="Estonia", 
                     carrier="Wind", 
                     capital_cost = capital_cost_wind,
-                    p_max_pu=self.wind_cf.values)
+                    p_max_pu=self.wind_cf['EE'].values)
         
         # PV
         # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
@@ -63,7 +61,7 @@ class Network():
                     bus="Estonia", 
                     carrier="Solar", 
                     capital_cost = capital_cost_solar,
-                    p_max_pu=self.solar_cf.values)
+                    p_max_pu=self.solar_cf['EE'].values)
         
         # OCGT Power Plant
         # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
@@ -83,7 +81,7 @@ class Network():
         # https://www.econstor.eu/handle/10419/80348
         over_night_cost_IFPP = annualize(1_400_000, 2012, 2017) # in €/MW
         capital_cost_coal = annuity(25,0.07)*over_night_cost_IFPP*(1+0.033) # in €/MW
-        fuel_cost_coal = 12.6 # in €/MWh_th, source: https://ourworldindata.org/grapher/coal-prices
+        fuel_cost_coal = 12.95 # in €/MWh_th, source: https://ourworldindata.org/grapher/coal-prices
         efficiency_coal = 0.35 # MWh_elec/MWh_th
         marginal_cost_coal = fuel_cost_coal/efficiency_coal # in €/MWh_el
         
@@ -97,21 +95,25 @@ class Network():
         
         if storage:
             self.add_storage()
+        if transmission:
+            self.add_transmission()
+        if external:
+            self.add_external()
+
         
         self.network.sanitize()
 
-    
     def add_storage(self):
-        #TODO: Check numbers and find sources
+
         # https://www.sciencedirect.com/science/article/pii/S0378775312014759?via%3Dihub
-        over_night_cost_battery = annualize(609_000, 2008, 2017) # in €/MW
-        capital_cost = annuity(15, 0.07) * over_night_cost_battery * (1 + 0.033) # in €/MW
+        over_night_cost_battery = annualize(409_000, 2008, 2017) # in €/MW
+        capital_cost = annuity(20, 0.07) * over_night_cost_battery * (1 + 0.033) # in €/MW
         marginal_cost = 0.0
 
         efficiency_store = 0.9
         efficiency_dispatch = 0.9
 
-        max_hours = 6  # energy capacity = power * hours
+        max_hours = 8  # energy capacity = power * hours
 
         self.network.add("StorageUnit",
                         "Battery Storage",
@@ -179,8 +181,115 @@ class Network():
                         x=x,
                         v_nom=v)
 
-    # also need the system and loads for the latvia, finland, sweden
+    def add_external(self):
+        
+        # Add bus for each country
+        self.network.add("Bus", "Finland")
+        self.network.add("Bus", "Sweden")
+        self.network.add("Bus", "Latvia")
 
+        # Add loads for each country
+        self.network.add("Load", 
+                    "Finland_Load",
+                    bus="Finland", 
+                    p_set=self.load['FI'].values)
+        self.network.loads_t.p_set
+        
+        self.network.add("Load", 
+                    "Sweden_Load",
+                    bus="Sweden", 
+                    p_set=self.load['SE'].values)
+        self.network.loads_t.p_set
+        
+        self.network.add("Load", 
+                    "Latvia_Load",
+                    bus="Latvia",
+                    p_set=self.load['LV'].values)
+        self.network.loads_t.p_set
+        
+        
+        # Add generators in neigbouring coutries
+        
+        # https://www.econstor.eu/handle/10419/80348
+
+        over_night_cost_nuclear = annualize(4_000_000, 2010, 2017) # in €/MW
+        capital_cost_nuclear = annuity(25,0.07)*over_night_cost_nuclear*(1+0.033) # in €/MW
+        fuel_cost = 12 # in €/MWh_th
+        efficiency = 0.33 # MWh_elec/MWh_th
+        marginal_cost_Nuclear = fuel_cost/efficiency # in €/MWh_el
+        self.network.add(
+            "Generator",
+            "Nuclear Finland",
+            bus="Finland",
+            carrier="Nuclear",
+            p_nom_extendable=True,
+            capital_cost = capital_cost_nuclear,
+            marginal_cost = marginal_cost_Nuclear
+        )
+        
+        # Onshore Wind
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_wind = annuity(30,0.07)*910_000*(1+0.033) # in €/MW
+        self.network.add("Generator", 
+                    "Wind Generator Finland", 
+                    p_nom_extendable=True,
+                    bus="Finland", 
+                    carrier="Wind", 
+                    capital_cost = capital_cost_wind,
+                    p_max_pu=self.wind_cf['FI'].values)
+        
+        
+        
+        # https://www.sciencedirect.com/science/article/pii/S0378775312014759?via%3Dihub
+        capital_cost_hydro = annuity(80,0.07)*2_000_000*(1+0.033) # in €/MW
+        marginal_cost_hydro = 0
+        self.network.add(
+            "Generator",
+            "Hydro Sweden",
+            bus="Sweden",
+            carrier="Hydro",
+            p_nom_extendable=True,
+            capital_cost=capital_cost_hydro,
+            marginal_cost=marginal_cost_hydro
+        )
+        
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_wind = annuity(30,0.07)*910_000*(1+0.033) # in €/MW
+        self.network.add("Generator", 
+                    "Wind Generator Sweden", 
+                    p_nom_extendable=True,
+                    bus="Sweden", 
+                    carrier="Wind", 
+                    capital_cost = capital_cost_wind,
+                    p_max_pu=self.wind_cf['SE'].values)
+        
+        
+        # Ignite Fired Power Plant
+        # https://www.econstor.eu/handle/10419/80348
+        over_night_cost_IFPP = annualize(1_400_000, 2012, 2017) # in €/MW
+        capital_cost_coal = annuity(25,0.07)*over_night_cost_IFPP*(1+0.033) # in €/MW
+        fuel_cost_coal = 12.95 # in €/MWh_th, source: https://ourworldindata.org/grapher/coal-prices
+        efficiency_coal = 0.35 # MWh_elec/MWh_th
+        marginal_cost_coal = fuel_cost_coal/efficiency_coal # in €/MWh_el
+        
+        self.network.add("Generator",
+                    "Coal",
+                    bus="Latvia",
+                    p_nom_extendable=True,
+                    carrier="Coal",
+                    capital_cost = capital_cost_coal,
+                    marginal_cost = marginal_cost_coal)
+        
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_wind = annuity(30,0.07)*910_000*(1+0.033) # in €/MW
+        self.network.add("Generator", 
+                    "Wind Generator Latvia", 
+                    p_nom_extendable=True,
+                    bus="Latvia", 
+                    carrier="Wind", 
+                    capital_cost = capital_cost_wind,
+                    p_max_pu=self.wind_cf['LV'].values)
+        
     def optimize_network(self):
         self.network.optimize(
             solver_name="gurobi",
@@ -211,14 +320,11 @@ class Network():
                 },
                 index=dispatch.index,
             )
-
-        #print("Optimal capacities:")
-        #print(capacities)
-
-        #print("Optimal generation:")
-        #print(dispatch)
+            
+            
 
         return dispatch, capacities, storage_data
+        
         
 
 if __name__ == "__main__":
@@ -226,7 +332,7 @@ if __name__ == "__main__":
     ### LOADING DATA ###
 
     print("Loading data...")
-    load, wind_cf, solar_cf = load_data("EE", 2017)
+    load, wind_cf, solar_cf = load_data(year=2017)
 
     print(f"Load series length: {len(load)}")
     print(f"Wind CF series length: {len(wind_cf)}")
@@ -237,53 +343,14 @@ if __name__ == "__main__":
     
     ### BUILD NETWORK ###
     
-    january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
-    january_week = hours[january_week_mask]
-
-    july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
-    july_week = hours[july_week_mask]
-
-    scenarios = [
-        (False, "without storage"),
-        (True, "with storage"),
-    ]
-
-    for storage_enabled, scenario_label in scenarios:
-        network = Network(load, wind_cf, solar_cf, hours)
-        network.build_network(storage=storage_enabled)
-        network.optimize_network()
-        dispatch, _, storage_data = network.display_results()
-
-        plot_dispatch(
-            january_week,
-            dispatch[january_week_mask],
-            load[january_week_mask],
-            f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
-        )
-
-        plot_dispatch(
-            july_week,
-            dispatch[july_week_mask],
-            load[july_week_mask],
-            f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
-        )
-
-        plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 ({scenario_label})")
-        plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
-
-        if storage_data is not None:
-            plot_storage_operation(
-                january_week,
-                storage_data[january_week_mask],
-                f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
-            )
-            plot_storage_operation(
-                july_week,
-                storage_data[july_week_mask],
-                f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
-            )
-
+    network = Network(load, wind_cf, solar_cf, hours)
+    network.build_network(storage=True, transmission=True, external=True)
+    network.optimize_network()
+    dispatch, capacities, storage_data = network.display_results()
     
+    
+    
+
 
 
 
