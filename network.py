@@ -45,7 +45,7 @@ class Network():
         # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
         capital_cost_wind = annuity(30,0.07)*910_000*(1+0.033) # in €/MW
         self.network.add("Generator", 
-                    "Wind Generator", 
+                    "Wind Generator Estonia", 
                     p_nom_extendable=True,
                     bus="Estonia", 
                     carrier="Wind", 
@@ -56,7 +56,7 @@ class Network():
         # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
         capital_cost_solar = annuity(25,0.07)*425_000*(1+0.03) # in €/MW
         self.network.add("Generator", 
-                    "Solar Generator", 
+                    "Solar Generator Estonia", 
                     p_nom_extendable=True,
                     bus="Estonia", 
                     carrier="Solar", 
@@ -70,7 +70,7 @@ class Network():
         efficiency = 0.39 # MWh_elec/MWh_th
         marginal_cost_OCGT = fuel_cost/efficiency # in €/MWh_el
         self.network.add("Generator",
-                    "OCGT",
+                    "OCGT Estonia",
                     bus="Estonia",
                     p_nom_extendable=True,
                     carrier="Gas",
@@ -86,7 +86,7 @@ class Network():
         marginal_cost_coal = fuel_cost_coal/efficiency_coal # in €/MWh_el
         
         self.network.add("Generator",
-                    "Coal",
+                    "Coal Estonia",
                     bus="Estonia",
                     p_nom_extendable=True,
                     carrier="Coal",
@@ -273,7 +273,7 @@ class Network():
         marginal_cost_coal = fuel_cost_coal/efficiency_coal # in €/MWh_el
         
         self.network.add("Generator",
-                    "Coal",
+                    "Coal Latvia",
                     bus="Latvia",
                     p_nom_extendable=True,
                     carrier="Coal",
@@ -349,8 +349,28 @@ if __name__ == "__main__":
     dispatch, capacities, storage_data = network.display_results()
     
     
+    # calculate imbalances in each node for the first hour
+    # Finland
+    generation_finland = dispatch['Wind Generator Finland'].iloc[0] + dispatch['Nuclear Finland'].iloc[0]
+    imbalance_finland = generation_finland - load['FI'].iloc[0]
+    # Sweden (SE2)
+    generation_sweden = dispatch['Wind Generator Sweden'].iloc[0] + dispatch['Hydro Sweden'].iloc[0]
+    imbalance_sweden = generation_sweden - load['SE'].iloc[0]
+    # Latvia
+    generation_latvia = dispatch['Wind Generator Latvia'].iloc[0] + dispatch['Coal Latvia'].iloc[0]
+    imbalance_latvia = generation_latvia - load['LV'].iloc[0]
+
+    generation_estonia = dispatch['Wind Generator Estonia'].iloc[0] + dispatch['Coal Estonia'].iloc[0] + dispatch['Solar Generator Estonia'].iloc[0] + dispatch['OCGT Estonia'].iloc[0] + dispatch['Battery Storage Discharge'].iloc[0]
+    imbalance_estonia = generation_estonia - (load['EE'].iloc[0] + dispatch['Battery Storage Charge'].iloc[0])
+
+
+    # create dataframe for imbalances
+    imbalance_df = pd.DataFrame({
+        "Finland": imbalance_finland,
+        "Sweden": imbalance_sweden,
+        "Latvia": imbalance_latvia,
+        "Estonia": imbalance_estonia
+    }, index=[dispatch.index[0]])
     
-
-
 
 

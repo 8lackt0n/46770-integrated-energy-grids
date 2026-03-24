@@ -66,12 +66,38 @@ network = Network(load, wind_cf, solar_cf, hours)
 network.build_network(storage=True, transmission=True, external=True)
 network.optimize_network()
 dispatch, capacities, storage_data = network.display_results()
-# TODO: Maybe add more generation technologies
+# TODO: Maybe add more generation technologies??
 # TODO: Plot and discuss the results
 
 # e)
+# TODO: Need to claculate the PTDF and incidence matrix
+# TODO: Find optimal power flow in each line
+# TODO: Compare with the model
+# calculate imbalances in each node for the first hour
+# Finland
+generation_finland = dispatch['Wind Generator Finland'].iloc[0] + dispatch['Nuclear Finland'].iloc[0]
+imbalance_finland = generation_finland - load['FI'].iloc[0]
+# Sweden (SE2)
+generation_sweden = dispatch['Wind Generator Sweden'].iloc[0] + dispatch['Hydro Sweden'].iloc[0]
+imbalance_sweden = generation_sweden - load['SE'].iloc[0]
+# Latvia
+generation_latvia = dispatch['Wind Generator Latvia'].iloc[0] + dispatch['Coal Latvia'].iloc[0]
+imbalance_latvia = generation_latvia - load['LV'].iloc[0]
 
-# dispatch the first hour
-dispatch_first_hour = dispatch.iloc[0]
-print("Dispatch for the first hour of 2017:")
-print(dispatch_first_hour)
+generation_estonia = dispatch['Wind Generator Estonia'].iloc[0] + dispatch['Coal Estonia'].iloc[0] + dispatch['Solar Generator Estonia'].iloc[0] + dispatch['OCGT Estonia'].iloc[0] + dispatch['Battery Storage Discharge'].iloc[0]
+imbalance_estonia = generation_estonia - (load['EE'].iloc[0] + dispatch['Battery Storage Charge'].iloc[0])
+
+
+# create dataframe for imbalances
+imbalance_df = pd.DataFrame({
+    "Finland": imbalance_finland,
+    "Sweden": imbalance_sweden,
+    "Latvia": imbalance_latvia,
+    "Estonia": imbalance_estonia
+}, index=[dispatch.index[0]])
+print("Imbalances in each node for the first hour:")
+print(imbalance_df)
+
+# print power flows in each line for the first hour
+print("Power flows in each line for the first hour:")
+print(network.network.lines_t.p0.loc[network.network.snapshots[0]])

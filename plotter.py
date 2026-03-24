@@ -6,10 +6,10 @@ import numpy as np
 def _dispatch_series(df):
     colors, _ = color_palette()
     series = [
-        ("Wind Generator", "Wind Production [MWh]", colors[13]),
-        ("Solar Generator", "PV Production [MWh]", colors[12]),
-        ("OCGT", "Gas Production [MWh]", colors[14]),
-        ("Coal", "Coal Production [MWh]", colors[15]),
+        ("Wind Generator Estonia", "Wind Production [MWh]", colors[13]),
+        ("Solar Generator Estonia", "PV Production [MWh]", colors[12]),
+        ("OCGT Estonia", "Gas Production [MWh]", colors[14]),
+        ("Coal Estonia", "Coal Production [MWh]", colors[15]),
     ]
 
     if "Battery Storage Discharge" in df.columns:
@@ -118,13 +118,14 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
     colors, background_color = color_palette()
 
     components = [
-        ("Wind Generator", "Wind", colors[13]),
-        ("Solar Generator", "Solar", colors[12]),
-        ("OCGT", "Gas", colors[14]),
-        ("Coal", "Coal", colors[15]),
+        ("Wind Generator Estonia", "Wind", colors[13]),
+        ("Solar Generator Estonia", "Solar", colors[12]),
+        ("OCGT Estonia", "Gas", colors[14]),
+        ("Coal Estonia", "Coal", colors[15]),
     ]
     if "Battery Storage Discharge" in df.columns:
         components.append(("Battery Storage Discharge", "Battery Discharge", colors[9]))
+    
 
     values = [df[col].sum() for col, _, _ in components]
     labels = [label for _, label, _ in components]
@@ -156,10 +157,10 @@ def plot_duration_curve(df, title, show=False, save=True):
     colors, background_color = color_palette()
 
     series = [
-        ("Wind Generator", "Wind", colors[13]),
-        ("Solar Generator", "Solar", colors[12]),
-        ("OCGT", "Gas", colors[14]),
-        ("Coal", "Coal", colors[15]),
+        ("Wind Generator Estonia", "Wind", colors[13]),
+        ("Solar Generator Estonia", "Solar", colors[12]),
+        ("OCGT Estonia", "Gas", colors[14]),
+        ("Coal Estonia", "Coal", colors[15]),
     ]
     if "Battery Storage Discharge" in df.columns:
         series.append(("Battery Storage Discharge", "Battery Discharge", colors[9]))
