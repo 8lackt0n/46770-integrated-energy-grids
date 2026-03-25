@@ -25,6 +25,29 @@ scenarios = [(False, "without storage"),(True, "with storage"),]
 
 scenario_results = []
 
+
+def compute_shared_power_axis_max(dispatch_df, load_series):
+    # Support both single-node names and Estonia-specific names.
+    dispatch_power_columns = [
+        "Wind Generator",
+        "Wind Generator Estonia",
+        "Solar Generator",
+        "Solar Generator Estonia",
+        "OCGT",
+        "OCGT Estonia",
+        "Coal",
+        "Coal Estonia",
+        "Battery Storage Discharge",
+    ]
+
+    power_max_candidates = [float(load_series.max())]
+    available_columns = [col for col in dispatch_power_columns if col in dispatch_df.columns]
+    if available_columns:
+        total_power = dispatch_df[available_columns].sum(axis=1)
+        power_max_candidates.append(float(total_power.max()))
+
+    return max(power_max_candidates) * 1.05
+
 for storage_enabled, scenario_label in scenarios:
     network = Network(load, wind_cf, solar_cf, hours)
     network.build_network(storage=storage_enabled)
@@ -41,16 +64,10 @@ for storage_enabled, scenario_label in scenarios:
         }
     )
 
-power_max_candidates = [float(load["EE"].max())]
-dispatch_power_columns = ["Wind Generator", "Solar Generator", "OCGT", "Coal", "Battery Storage Discharge"]
-
-for result in scenario_results:
-    available_columns = [col for col in dispatch_power_columns if col in result["dispatch"].columns]
-    if available_columns:
-        total_power = result["dispatch"][available_columns].sum(axis=1)
-        power_max_candidates.append(float(total_power.max()))
-
-shared_power_axis_max = max(power_max_candidates) * 1.05
+shared_power_axis_max = max(
+    compute_shared_power_axis_max(result["dispatch"], load["EE"])
+    for result in scenario_results
+)
 
 january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
 january_week = hours[january_week_mask]
@@ -118,15 +135,7 @@ load_est = load["EE"]
 
 scenario_label = "with storage and transmission"
 
-power_max_candidates = [float(load_est.max())]
-dispatch_power_columns = ["Wind Generator", "Solar Generator", "OCGT", "Coal", "Battery Storage Discharge"]
-
-available_columns = [col for col in dispatch_power_columns if col in dispatch.columns]
-if available_columns:
-    total_power = dispatch[available_columns].sum(axis=1)
-    power_max_candidates.append(float(total_power.max()))
-
-shared_power_axis_max = max(power_max_candidates) * 1.05
+shared_power_axis_max = compute_shared_power_axis_max(dispatch, load_est)
 
 # --- PLOTS ---
 plot_dispatch(
