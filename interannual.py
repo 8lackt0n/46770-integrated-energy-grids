@@ -9,8 +9,7 @@ for year in years:
 
     print(f"Running model for {year}")
 
-    load, wind_cf, solar_cf = load_data("EE", year)
-
+    load, wind_cf, solar_cf = load_data(year)
     hours = pd.date_range(
         f'{year}-01-01 00:00Z',
         f'{year}-12-31 23:00Z',
@@ -21,7 +20,7 @@ for year in years:
     network.build_network()
     network.optimize_network()
 
-    _, capacities, _, _ = network.display_results()
+    _, capacities, _, _, _ = network.display_results()
 
     capacity_results.append(capacities)
 

@@ -13,7 +13,7 @@ print(f"Wind CF series length: {len(wind_cf)}")
 print(f"Solar CF series length: {len(solar_cf)}")
 hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
 
-# a), b) and c)
+# a) and c) (see interannual for b))
 
 january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
 january_week = hours[january_week_mask]
@@ -105,8 +105,64 @@ network = Network(load, wind_cf, solar_cf, hours)
 network.build_network(storage=True, transmission=True, external=True)
 network.optimize_network()
 dispatch, capacities, storage_data, battery_capacity, dispatch_all = network.display_results()
-# TODO: Maybe add more generation technologies??
-# TODO: Plot and discuss the results
+# TODO: Maybe add more generation technologies?? - nah maybe later
+# TODO: Plot and discuss the results - maybe also a transmission plot?
+
+january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
+january_week = hours[january_week_mask]
+
+july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
+july_week = hours[july_week_mask]
+
+load_est = load["EE"]
+
+scenario_label = "with storage and transmission"
+
+power_max_candidates = [float(load_est.max())]
+dispatch_power_columns = ["Wind Generator", "Solar Generator", "OCGT", "Coal", "Battery Storage Discharge"]
+
+available_columns = [col for col in dispatch_power_columns if col in dispatch.columns]
+if available_columns:
+    total_power = dispatch[available_columns].sum(axis=1)
+    power_max_candidates.append(float(total_power.max()))
+
+shared_power_axis_max = max(power_max_candidates) * 1.05
+
+# --- PLOTS ---
+plot_dispatch(
+    january_week,
+    dispatch[january_week_mask],
+    load_est[january_week_mask],
+    f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
+    power_axis_max=shared_power_axis_max,
+    soc_axis_max=battery_capacity,
+)
+
+plot_dispatch(
+    july_week,
+    dispatch[july_week_mask],
+    load_est[july_week_mask],
+    f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
+    power_axis_max=shared_power_axis_max,
+    soc_axis_max=battery_capacity,
+)
+
+plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 ({scenario_label})")
+plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
+
+if storage_data is not None:
+    plot_storage_operation(
+        january_week,
+        storage_data[january_week_mask],
+        f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
+    )
+    plot_storage_operation(
+        july_week,
+        storage_data[july_week_mask],
+        f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
+    )
+
+
 
 # e)
 # TODO: Need to claculate the PTDF and incidence matrix
