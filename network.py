@@ -300,35 +300,51 @@ class Network():
         
     def display_results(self):
 
-        capacities = self.network.generators.p_nom_opt
-        dispatch = self.network.generators_t.p.copy()
+        capacities = self.network.generators.loc[
+            self.network.generators.bus == "Estonia", "p_nom_opt"
+        ]
+
+        # Filter generators connected to Estonia
+        estonia_gens = self.network.generators.index[
+            self.network.generators.bus == "Estonia"
+        ]
+
+        dispatch = self.network.generators_t.p[estonia_gens].copy()
 
         storage_data = None
         battery_capacity = None
+
         if not self.network.storage_units.empty:
-            storage_p = self.network.storage_units_t.p.copy()
-            storage_soc = self.network.storage_units_t.state_of_charge.copy()
+            # Filter storage units connected to Estonia
+            estonia_storage = self.network.storage_units.index[
+                self.network.storage_units.bus == "Estonia"
+            ]
 
-            storage_name = self.network.storage_units.index[0]
-            storage_power = float(self.network.storage_units.at[storage_name, "p_nom_opt"])
-            storage_hours = float(self.network.storage_units.at[storage_name, "max_hours"])
-            battery_capacity = storage_power * storage_hours
-            dispatch["Battery Storage Discharge"] = storage_p[storage_name].clip(lower=0)
-            dispatch["Battery Storage Charge"] = (-storage_p[storage_name].clip(upper=0))
-            dispatch["Battery Storage SoC"] = storage_soc[storage_name]
+            if len(estonia_storage) > 0:
+                storage_p = self.network.storage_units_t.p[estonia_storage].copy()
+                storage_soc = self.network.storage_units_t.state_of_charge[estonia_storage].copy()
 
-            storage_data = pd.DataFrame(
-                {
-                    "Battery Storage Discharge": dispatch["Battery Storage Discharge"],
-                    "Battery Storage Charge": dispatch["Battery Storage Charge"],
-                    "Battery Storage SoC": dispatch["Battery Storage SoC"],
-                },
-                index=dispatch.index,
-            )
+                storage_name = estonia_storage[0]
+                storage_power = float(self.network.storage_units.at[storage_name, "p_nom_opt"])
+                storage_hours = float(self.network.storage_units.at[storage_name, "max_hours"])
+                battery_capacity = storage_power * storage_hours
+
+                dispatch["Battery Storage Discharge"] = storage_p[storage_name].clip(lower=0)
+                dispatch["Battery Storage Charge"] = (-storage_p[storage_name].clip(upper=0))
+                dispatch["Battery Storage SoC"] = storage_soc[storage_name]
+
+                storage_data = pd.DataFrame(
+                    {
+                        "Battery Storage Discharge": dispatch["Battery Storage Discharge"],
+                        "Battery Storage Charge": dispatch["Battery Storage Charge"],
+                        "Battery Storage SoC": dispatch["Battery Storage SoC"],
+                    },
+                    index=dispatch.index,
+                )
             
-            
+        dispatch_all = self.network.generators_t.p.copy()
 
-        return dispatch, capacities, storage_data, battery_capacity
+        return dispatch, capacities, storage_data, battery_capacity, dispatch_all
         
         
 
@@ -342,119 +358,3 @@ if __name__ == "__main__":
     print(f"Load series length: {len(load)}")
     print(f"Wind CF series length: {len(wind_cf)}")
     print(f"Solar CF series length: {len(solar_cf)}")
-    hours = pd.date_range('2017-01-01 00:00',
-                                '2017-12-31 23:00',
-                                freq='h')
-    
-    ### BUILD NETWORK ###
-    
-    network = Network(load, wind_cf, solar_cf, hours)
-    network.build_network(storage=True, transmission=True, external=True)
-    network.optimize_network()
-    dispatch, capacities, storage_data = network.display_results()
-    
-    
-    # calculate imbalances in each node for the first hour
-    # Finland
-    generation_finland = dispatch['Wind Generator Finland'].iloc[0] + dispatch['Nuclear Finland'].iloc[0]
-    imbalance_finland = generation_finland - load['FI'].iloc[0]
-    # Sweden (SE2)
-    generation_sweden = dispatch['Wind Generator Sweden'].iloc[0] + dispatch['Hydro Sweden'].iloc[0]
-    imbalance_sweden = generation_sweden - load['SE'].iloc[0]
-    # Latvia
-    generation_latvia = dispatch['Wind Generator Latvia'].iloc[0] + dispatch['Coal Latvia'].iloc[0]
-    imbalance_latvia = generation_latvia - load['LV'].iloc[0]
-
-    generation_estonia = dispatch['Wind Generator Estonia'].iloc[0] + dispatch['Coal Estonia'].iloc[0] + dispatch['Solar Generator Estonia'].iloc[0] + dispatch['OCGT Estonia'].iloc[0] + dispatch['Battery Storage Discharge'].iloc[0]
-    imbalance_estonia = generation_estonia - (load['EE'].iloc[0] + dispatch['Battery Storage Charge'].iloc[0])
-
-    scenarios = [
-        (False, "without storage"),
-        (True, "with storage"),
-    ]
-
-    scenario_results = []
-
-    for storage_enabled, scenario_label in scenarios:
-        network = Network(load, wind_cf, solar_cf, hours)
-        network.build_network(storage=storage_enabled)
-        network.optimize_network()
-        dispatch, _, storage_data, battery_capacity = network.display_results()
-
-        scenario_results.append(
-            {
-                "storage_enabled": storage_enabled,
-                "scenario_label": scenario_label,
-                "dispatch": dispatch,
-                "storage_data": storage_data,
-                "battery_capacity": battery_capacity,
-            }
-        )
-
-    power_max_candidates = [float(load.max())]
-    dispatch_power_columns = ["Wind Generator", "Solar Generator", "OCGT", "Coal", "Battery Storage Discharge"]
-
-    for result in scenario_results:
-        available_columns = [col for col in dispatch_power_columns if col in result["dispatch"].columns]
-        if available_columns:
-            total_power = result["dispatch"][available_columns].sum(axis=1)
-            power_max_candidates.append(float(total_power.max()))
-
-    shared_power_axis_max = max(power_max_candidates) * 1.05
-
-    january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
-    january_week = hours[january_week_mask]
-
-    july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
-    july_week = hours[july_week_mask]
-
-    for result in scenario_results:
-        storage_enabled = result["storage_enabled"]
-        scenario_label = result["scenario_label"]
-        dispatch = result["dispatch"]
-        storage_data = result["storage_data"]
-        battery_capacity = result["battery_capacity"]
-
-        plot_dispatch(
-            january_week,
-            dispatch[january_week_mask],
-            load[january_week_mask],
-            f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
-            power_axis_max=shared_power_axis_max,
-            soc_axis_max=battery_capacity,
-        )
-
-        plot_dispatch(
-            july_week,
-            dispatch[july_week_mask],
-            load[july_week_mask],
-            f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
-            power_axis_max=shared_power_axis_max,
-            soc_axis_max=battery_capacity,
-        )
-
-        plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 ({scenario_label})")
-        plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
-
-        if storage_data is not None:
-            plot_storage_operation(
-                january_week,
-                storage_data[january_week_mask],
-                f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
-            )
-            plot_storage_operation(
-                july_week,
-                storage_data[july_week_mask],
-                f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
-            )
-
-    # create dataframe for imbalances
-    imbalance_df = pd.DataFrame({
-        "Finland": imbalance_finland,
-        "Sweden": imbalance_sweden,
-        "Latvia": imbalance_latvia,
-        "Estonia": imbalance_estonia
-    }, index=[dispatch.index[0]])
-    
-
-
