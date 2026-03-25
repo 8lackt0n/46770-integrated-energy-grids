@@ -67,7 +67,7 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True, power_axis
     if "Battery Storage Discharge" in df.columns:
         subtitle = "Wind, Solar, Gas, Coal, and Battery Dynamics in MWh"
 
-    ax1.text(0.0, 1.03, subtitle,
+    ax1.text(0.0, 1.01, subtitle,
             transform=ax1.transAxes, fontsize=10, color="black", ha="left")
 
     ax1.spines["top"].set_visible(False)
@@ -118,10 +118,10 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True, power_axis
         ax1.set_ylim(0, power_axis_max)
     ax1.set_xlabel('Time')
     ax1.text(0.0, 1.07, title, transform=ax1.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
-    ax1.text(0.0, 1.03, subtitle, transform=ax1.transAxes, fontsize=10, color='black', ha='left')
+    ax1.text(0.0, 1.01, subtitle, transform=ax1.transAxes, fontsize=10, color='black', ha='left')
     lines_1, labels_1 = ax1.get_legend_handles_labels()
     lines_2, labels_2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
+    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, bbox_to_anchor=(0.5, -0.16), ncol=4, loc='upper center')
     ax1.spines['top'].set_visible(False)
     ax1.spines['right'].set_visible(False)
 
@@ -159,7 +159,7 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
     labels = [label for _, label, _ in components]
     pie_colors = [color for _, _, color in components]
     
-    fig, ax = plt.subplots(figsize=(12, 4))
+    fig, ax = plt.subplots(figsize=(14, 4))
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
     ax.pie(values, labels=labels, colors=pie_colors, autopct='%1.1f%%')
@@ -168,8 +168,16 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
     if "Battery Storage Discharge" in df.columns:
         annual_subtitle = 'Total Wind, Solar, Gas, Coal, and Battery Discharge in MWh'
 
-    ax.text(0.0, 1.03, annual_subtitle, transform=ax.transAxes, fontsize=10, color='black', ha='left')
-    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc='upper center')
+    ax.text(0.0, 1.01, annual_subtitle, transform=ax.transAxes, fontsize=10, color='black', ha='left')
+    ax.legend(
+        labels,
+        bbox_to_anchor=(1.48, 0.5),
+        loc='center left',
+        frameon=True,
+        facecolor='white',
+        framealpha=1,
+    )
+    fig.subplots_adjust(right=0.58)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     
@@ -203,7 +211,7 @@ def plot_duration_curve(df, title, show=False, save=True):
         sorted_values = df[col].sort_values(ascending=False).reset_index(drop=True)
         ax.plot(hours, sorted_values, label=label, color=color)
 
-    ax.set_xlabel("Hours (sorted)")
+    ax.set_xlabel("Hours (sorted)", labelpad=5)
     ax.set_ylabel("Generation [MWh]")
 
     ax.text(0.0, 1.07,
@@ -213,13 +221,19 @@ def plot_duration_curve(df, title, show=False, save=True):
         fontweight="bold"
     )
 
-    ax.text(0.0, 1.03,
+    ax.text(0.0, 1.01,
         "Sorted hourly generation for each technology",
         transform=ax.transAxes,
         fontsize=10
     )
 
-    ax.legend(bbox_to_anchor=(0.5, -0.10), ncol=4, loc="upper center")
+    # Keep the legend below the x-axis label and use one row when possible.
+    ax.legend(
+        bbox_to_anchor=(0.5, -0.16),
+        ncol=len(series),
+        loc="upper center",
+    )
+    fig.subplots_adjust(bottom=0.25)
 
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
@@ -260,7 +274,7 @@ def plot_capacity_variability(capacity_df, title, show=False, save=True):
         fontweight="bold"
     )
 
-    ax.text(0.0, 1.03,
+    ax.text(0.0, 1.01,
         "Error bars show standard deviation across weather years",
         transform=ax.transAxes,
         fontsize=10
@@ -310,11 +324,11 @@ def plot_storage_operation(time_index, storage_df, title, show=False, save=True)
     ax2.set_ylabel("State of Charge [MWh]")
 
     ax1.text(0.0, 1.07, title, transform=ax1.transAxes, fontsize=14, color="black", ha="left", fontweight="bold")
-    ax1.text(0.0, 1.03, "Battery charging, discharging, and state of charge", transform=ax1.transAxes, fontsize=10, color="black", ha="left")
+    ax1.text(0.0, 1.01, "Battery charging, discharging, and state of charge", transform=ax1.transAxes, fontsize=10, color="black", ha="left")
 
     lines_1, labels_1 = ax1.get_legend_handles_labels()
     lines_2, labels_2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, bbox_to_anchor=(0.5, -0.10), ncol=3, loc="upper center")
+    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, bbox_to_anchor=(0.5, -0.16), ncol=3, loc="upper center")
 
     ax1.spines["top"].set_visible(False)
     ax2.spines["top"].set_visible(False)
