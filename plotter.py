@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import os
 import numpy as np
-
+import pandas as pd
 
 def _dispatch_series(df):
     colors, _ = color_palette()
@@ -341,3 +341,111 @@ def plot_storage_operation(time_index, storage_df, title, show=False, save=True)
     if show:
         plt.show()
 
+def plot_annual_energy_mix_vs_co2_limits(scenario_results, title, show=False, save=True):
+    colors, background_color = color_palette()
+
+    components = [
+        ("Wind Generator Estonia", "Wind", colors[13]),
+        ("Solar Generator Estonia", "Solar", colors[12]),
+        ("OCGT Estonia", "Gas", colors[14]),
+        ("Coal Estonia", "Coal", colors[15]),
+        ("Battery Storage Discharge", "Battery Discharge", colors[9]),
+    ]
+
+    # Build annual generation table
+    rows = []
+    for scenario in scenario_results:
+        dispatch = scenario["dispatch"]
+        limit = scenario["co2_limit"]
+
+        row = {"co2_limit": limit}
+
+        for col_name, label, _ in components:
+            if col_name in dispatch.columns:
+                row[label] = dispatch[col_name].sum()
+            else:
+                row[label] = 0.0
+
+        rows.append(row)
+
+    df_plot = pd.DataFrame(rows)
+
+    # Sort by CO2 limit descending
+    df_plot = df_plot.sort_values("co2_limit", ascending=False).reset_index(drop=True)
+
+    # Convert to percentages
+    generation_cols = [label for _, label, _ in components]
+    row_totals = df_plot[generation_cols].sum(axis=1)
+
+    # Avoid division by zero
+    df_percent = df_plot.copy()
+    df_percent[generation_cols] = df_percent[generation_cols].div(row_totals.replace(0, np.nan), axis=0) * 100
+    df_percent[generation_cols] = df_percent[generation_cols].fillna(0)
+
+    # X labels
+    df_percent["co2_label"] = [f"{x/1e6:.1f}" for x in df_percent["co2_limit"]]
+
+    labels = [label for _, label, _ in components]
+    stack_colors = [color for _, _, color in components]
+
+    fig, ax = plt.subplots(figsize=(14, 5))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    bottom = np.zeros(len(df_percent))
+
+    for label, color in zip(labels, stack_colors):
+        values = df_percent[label].values
+        ax.bar(
+            df_percent["co2_label"],
+            values,
+            bottom=bottom,
+            label=label,
+            color=color,
+            edgecolor="white",
+            linewidth=0.5
+        )
+        bottom += values
+
+    ax.text(
+        0.0, 1.07, title,
+        transform=ax.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    ax.text(
+        0.0, 1.01,
+        "Technology share of annual generation (%) for each CO2 limit",
+        transform=ax.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax.set_xlabel("CO2 limit [MtCO2]")
+    ax.set_ylabel("Share of annual generation [%]")
+    ax.set_ylim(0, 100)
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.legend(
+        bbox_to_anchor=(1.02, 0.5),
+        loc="center left",
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
+
+    fig.subplots_adjust(right=0.82)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()

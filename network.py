@@ -14,7 +14,7 @@ class Network():
         self.solar_cf = solar_cf
         self.hours = hours
     
-    def build_network(self, storage=False, transmission=False, external=False):
+    def build_network(self, storage=False, transmission=False, external=False, gas=False):
 
         # PyPSA requires timezone-naive snapshots.
         snapshots = pd.DatetimeIndex(self.hours)
@@ -32,12 +32,12 @@ class Network():
         self.network.loads_t.p_set
 
         # Add network carriers
-        self.network.add("Carrier", "Wind")
-        self.network.add("Carrier", "Solar")
+        self.network.add("Carrier", "Wind", co2_emissions=0)
+        self.network.add("Carrier", "Solar", co2_emissions=0)
         self.network.add("Carrier", "Gas", co2_emissions=0.19)
         self.network.add("Carrier", "Coal", co2_emissions=1.0)
-        self.network.add("Carrier", "Nuclear")
-        self.network.add("Carrier", "Hydro")
+        self.network.add("Carrier", "Nuclear", co2_emissions=0)
+        self.network.add("Carrier", "Hydro", co2_emissions=0)
 
         # Add network generators
         
@@ -67,13 +67,14 @@ class Network():
         # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
         capital_cost_OCGT = annuity(25,0.07)*560_000*(1+0.033) # in €/MW
         fuel_cost = 21.6 # in €/MWh_th
-        efficiency = 0.39 # MWh_elec/MWh_th
-        marginal_cost_OCGT = fuel_cost/efficiency # in €/MWh_el
+        efficiency_gas = 0.39 # MWh_elec/MWh_th
+        marginal_cost_OCGT = fuel_cost/efficiency_gas # in €/MWh_el
         self.network.add("Generator",
                     "OCGT Estonia",
                     bus="Estonia",
                     p_nom_extendable=True,
                     carrier="Gas",
+                    efficiency=efficiency_gas,
                     capital_cost = capital_cost_OCGT,
                     marginal_cost = marginal_cost_OCGT)
         
@@ -90,6 +91,7 @@ class Network():
                     bus="Estonia",
                     p_nom_extendable=True,
                     carrier="Coal",
+                    efficiency=efficiency_coal,
                     capital_cost = capital_cost_coal,
                     marginal_cost = marginal_cost_coal)
         
@@ -99,10 +101,13 @@ class Network():
             self.add_transmission()
         if external:
             self.add_external()
+        if gas:
+            self.add_gas_network()
 
         
         self.network.sanitize()
-
+    
+        
     def add_storage(self):
 
         # https://www.sciencedirect.com/science/article/pii/S0378775312014759?via%3Dihub
@@ -278,6 +283,7 @@ class Network():
                     bus="Latvia",
                     p_nom_extendable=True,
                     carrier="Coal",
+                    efficiency = efficiency_coal,
                     capital_cost = capital_cost_coal,
                     marginal_cost = marginal_cost_coal)
         
@@ -290,7 +296,136 @@ class Network():
                     carrier="Wind", 
                     capital_cost = capital_cost_wind,
                     p_max_pu=self.wind_cf['LV'].values)
+    
+    def add_co2_limit(self, limit):
+        self.network.add(
+            "GlobalConstraint",
+            "co2_limit",
+            type="primary_energy",
+            carrier_attribute="co2_emissions",
+            sense="<=",
+            constant=limit  # total CO2 limit (e.g. in tonnes)
+        )
+    
+    def add_gas_network(self):
         
+        gas_price = 21.6  # €/MWh_th
+
+        # Add gas supply for each country
+        for country in ["Estonia", "Latvia", "Sweden", "Finland"]:
+            self.network.add(
+                "Generator",
+                f"{country} gas supply",
+                bus=f"{country} gas",
+                carrier="Gas",
+                p_nom_extendable=True,
+                marginal_cost=gas_price,
+            )
+            
+        self.network.remove("Generator", "OCGT Estonia")  # Remove the OCGT generator from the electricity network
+        
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_OCGT = annuity(25,0.07)*560_000*(1+0.033) # in €/MW
+        efficiency_gas = 0.39 # MWh_elec/MWh_th
+        marginal_cost_OCGT = gas_price/efficiency_gas # in €/MWh_el
+        
+        self.network.add(
+            "Link",
+            "OCGT Estonia",
+            bus0="Estonia gas",
+            bus1="Estonia",
+            carrier="Gas",
+            p_nom_extendable=True,
+            efficiency=efficiency_gas,
+            capital_cost = capital_cost_OCGT,
+            marginal_cost = marginal_cost_OCGT
+        )
+        
+        pipeline_capital_cost = 10000   # example €/MW/year
+        pipeline_efficiency = 1.0       # linear/lossless first approximation
+
+        
+        self.network.add("Link",
+                        "FIN-SWE Gas Pipeline",
+                        bus0="Finland gas",
+                        bus1="Sweden gas",
+                        carrier="Gas",
+                        p_nom_extendable=True,
+                        p_min_pu=-1,    # allow both directions
+                        efficiency=pipeline_efficiency,
+                        capital_cost=pipeline_capital_cost,
+                        marginal_cost = 0)
+
+        self.network.add("Link",
+                        "EST-FIN Gas Pipeline",
+                        bus0="Estonia gas",
+                        bus1="Finland gas",
+                        carrier="Gas",
+                        p_nom_extendable=True,
+                        p_min_pu=-1,    # allow both directions
+                        efficiency=pipeline_efficiency,
+                        capital_cost=pipeline_capital_cost,
+                        marginal_cost = 0)
+
+        self.network.add("Link",
+                        "EST-SWE Gas Pipeline",
+                        bus0="Estonia gas",
+                        bus1="Sweden gas",
+                        carrier="Gas",
+                        p_nom_extendable=True,
+                        p_min_pu=-1,    # allow both directions
+                        efficiency=pipeline_efficiency,
+                        capital_cost=pipeline_capital_cost,
+                        marginal_cost = 0)  
+        
+
+        self.network.add("Link",
+                        "EST-LAT Gas Pipeline",
+                        bus0="Estonia gas",
+                        bus1="Latvia gas",
+                        carrier="Gas",
+                        p_nom_extendable=True,
+                        p_min_pu=-1,    # allow both directions
+                        efficiency=pipeline_efficiency,
+                        capital_cost=pipeline_capital_cost,
+                        marginal_cost = 0)  
+    
+        
+    def global_carbon_analysis(self):
+        
+        # List of carbon emission constraints
+        # 1990 Emission levels Estonia
+        base_co2 = 86_000_000 # estimated based on https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
+        co2_limits = [base_co2, 0] # in tons of CO2
+        scenario_results = []
+        #TODO: Check different levels of CO2 limits, e.g. 50%, 25%, 10% of 1990 levels, etc.
+        for limit in co2_limits:
+            
+            self.network.add(
+                "GlobalConstraint",
+                "co2_limit",
+                type="primary_energy",
+                carrier_attribute="co2_emissions",
+                sense="<=",
+                constant=limit  # total CO2 limit (e.g. in tonnes)
+                )
+            self.optimize_network()
+            
+            dispatch, _, _, _, _ = self.display_results()
+            
+            # append dispatch to list for later plotting
+            scenario_results.append(
+                {
+                    "co2_limit": limit,
+                    "dispatch": dispatch,
+                }
+            )
+
+            self.network.remove("GlobalConstraint", "co2_limit")  # Remove previous constraint if it exists
+        return scenario_results    
+    
+    
+    
     def optimize_network(self):
         self.network.optimize(
             solver_name="gurobi",
@@ -298,24 +433,37 @@ class Network():
             include_objective_constant=True  # explicitly match current behavior
         )
         
+
     def display_results(self):
+        dispatch = pd.DataFrame(index=self.network.snapshots)
+        capacities_dict = {}
 
-        capacities = self.network.generators.loc[
-            self.network.generators.bus == "Estonia", "p_nom_opt"
-        ]
-
-        # Filter generators connected to Estonia
         estonia_gens = self.network.generators.index[
             self.network.generators.bus == "Estonia"
         ]
 
-        dispatch = self.network.generators_t.p[estonia_gens].copy()
+        if len(estonia_gens) > 0:
+            gen_dispatch = self.network.generators_t.p[estonia_gens].copy()
+            dispatch = pd.concat([dispatch, gen_dispatch], axis=1)
+
+            gen_capacities = self.network.generators.loc[estonia_gens, "p_nom_opt"]
+            capacities_dict.update(gen_capacities.to_dict())
+
+        
+        estonia_links = self.network.links.index[
+            self.network.links.bus1 == "Estonia"
+        ]
+
+        for link_name in estonia_links:
+            # Electricity output at bus1 is usually -p1
+            dispatch[link_name] = -self.network.links_t.p1[link_name]
+
+            capacities_dict[link_name] = self.network.links.at[link_name, "p_nom_opt"]
 
         storage_data = None
         battery_capacity = None
 
         if not self.network.storage_units.empty:
-            # Filter storage units connected to Estonia
             estonia_storage = self.network.storage_units.index[
                 self.network.storage_units.bus == "Estonia"
             ]
@@ -330,8 +478,10 @@ class Network():
                 battery_capacity = storage_power * storage_hours
 
                 dispatch["Battery Storage Discharge"] = storage_p[storage_name].clip(lower=0)
-                dispatch["Battery Storage Charge"] = (-storage_p[storage_name].clip(upper=0))
+                dispatch["Battery Storage Charge"] = -storage_p[storage_name].clip(upper=0)
                 dispatch["Battery Storage SoC"] = storage_soc[storage_name]
+
+                capacities_dict["Battery Storage"] = storage_power
 
                 storage_data = pd.DataFrame(
                     {
@@ -341,11 +491,13 @@ class Network():
                     },
                     index=dispatch.index,
                 )
-            
+
+        capacities = pd.Series(capacities_dict)
+
         dispatch_all = self.network.generators_t.p.copy()
 
         return dispatch, capacities, storage_data, battery_capacity, dispatch_all
-        
+            
         
 
 if __name__ == "__main__":
@@ -358,3 +510,20 @@ if __name__ == "__main__":
     print(f"Load series length: {len(load)}")
     print(f"Wind CF series length: {len(wind_cf)}")
     print(f"Solar CF series length: {len(solar_cf)}")
+    
+    hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
+    
+    january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
+    january_week = hours[january_week_mask]
+    
+    network = Network(load, wind_cf, solar_cf, hours=hours)
+    network.build_network(storage=True, transmission=True, external=True, gas=False)
+    
+    # scenario_results = network.global_carbon_analysis()
+    # plot_annual_energy_mix_vs_co2_limits(scenario_results, f"Annual Energy Mix for 2017 under Different CO2 Emission Limits", show=True, save=False)
+    
+    network.optimize_network()
+    
+    dispatch, capacities, storage_data, battery_capacity, dispatch_all = network.display_results()
+    
+    plot_annual_energy_mix(dispatch, f'Annual Energy Mix for Estonia in 2017', show=True, save=False)    

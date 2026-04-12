@@ -174,9 +174,6 @@ if storage_data is not None:
 
 
 # e)
-# TODO: Need to claculate the PTDF and incidence matrix
-# TODO: Find optimal power flow in each line
-# TODO: Compare with the model
 # calculate imbalances in each node for the first hour
 # Finland
 generation_finland = dispatch_all['Wind Generator Finland'].iloc[0] + dispatch_all['Nuclear Finland'].iloc[0]
