@@ -383,7 +383,7 @@ def plot_annual_energy_mix_vs_co2_limits(scenario_results, title, show=False, sa
     df_percent[generation_cols] = df_percent[generation_cols].fillna(0)
 
     # X labels
-    df_percent["co2_label"] = [f"{x/1e6:.1f}" for x in df_percent["co2_limit"]]
+    df_percent["co2_label"] = [f"{x:.0f}" for x in df_percent["co2_limit"]]
 
     labels = [label for _, label, _ in components]
     stack_colors = [color for _, _, color in components]
@@ -425,7 +425,7 @@ def plot_annual_energy_mix_vs_co2_limits(scenario_results, title, show=False, sa
         ha="left"
     )
 
-    ax.set_xlabel("CO2 limit [MtCO2]")
+    ax.set_xlabel("CO2 limit [tCO2]")
     ax.set_ylabel("Share of annual generation [%]")
     ax.set_ylim(0, 100)
 

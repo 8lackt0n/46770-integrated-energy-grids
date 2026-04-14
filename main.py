@@ -119,11 +119,12 @@ for result in scenario_results:
 
 # d)
 network = Network(load, wind_cf, solar_cf, hours)
+
 network.build_network(storage=True, transmission=True, external=True)
+
 network.optimize_network()
+
 dispatch, capacities, storage_data, battery_capacity, dispatch_all = network.display_results()
-# TODO: Maybe add more generation technologies?? - nah maybe later
-# TODO: Plot and discuss the results - maybe also a transmission plot?
 
 january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
 january_week = hours[january_week_mask]
@@ -202,3 +203,27 @@ print(imbalance_df)
 # print power flows in each line for the first hour
 print("Power flows in each line for the first hour:")
 print(network.network.lines_t.p0.loc[network.network.snapshots[0]])
+
+# f) Carbon emission analysis
+
+scenario_results = network.global_carbon_analysis()
+
+plot_annual_energy_mix_vs_co2_limits(scenario_results, f"Annual Energy Mix for 2017 under Different CO2 Emission Limits", show=False, save=True)
+
+# g) Add gas transmission network
+network.build_network(storage=True, transmission=True, external=True, gas_transmission=True)
+
+network.optimize_network()
+
+dispatch, capacities, storage_data, battery_capacity, dispatch_all = network.display_results()
+
+# plot energy mix with gas transmission
+plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 with Gas Transmission", show=False, save=True)
+
+# h) Add carbon emission constraints
+network.build_network(storage=True, transmission=True, external=True, gas=True, co2_limit=True, limit=28_000_000 * 0.01)
+
+network.optimize_network()
+
+co2_price = network.network.global_constraints.mu
+print(co2_price)
