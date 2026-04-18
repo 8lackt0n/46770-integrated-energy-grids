@@ -2,6 +2,7 @@ import pandas as pd
 from data_loader import load_data
 from plotter import *
 from network import Network
+from helper import *
 
 ### LOADING DATA ###
 
@@ -13,62 +14,6 @@ print(f"Wind CF series length: {len(wind_cf)}")
 print(f"Solar CF series length: {len(solar_cf)}")
 hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
 
-# a) and c) (see interannual for b))
-
-january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
-january_week = hours[january_week_mask]
-
-july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
-july_week = hours[july_week_mask]
-
-scenarios = [(False, "without storage"),(True, "with storage"),]
-
-scenario_results = []
-
-
-def compute_shared_power_axis_max(dispatch_df, load_series):
-    # Support both single-node names and Estonia-specific names.
-    dispatch_power_columns = [
-        "Wind Generator",
-        "Wind Generator Estonia",
-        "Solar Generator",
-        "Solar Generator Estonia",
-        "OCGT",
-        "OCGT Estonia",
-        "Coal",
-        "Coal Estonia",
-        "Battery Storage Discharge",
-    ]
-
-    power_max_candidates = [float(load_series.max())]
-    available_columns = [col for col in dispatch_power_columns if col in dispatch_df.columns]
-    if available_columns:
-        total_power = dispatch_df[available_columns].sum(axis=1)
-        power_max_candidates.append(float(total_power.max()))
-
-    return max(power_max_candidates) * 1.05
-
-for storage_enabled, scenario_label in scenarios:
-    network = Network(load, wind_cf, solar_cf, hours)
-    network.build_network(storage=storage_enabled)
-    network.optimize_network()
-    dispatch, _, storage_data, battery_capacity, _ = network.display_results()
-
-    scenario_results.append(
-        {
-            "storage_enabled": storage_enabled,
-            "scenario_label": scenario_label,
-            "dispatch": dispatch,
-            "storage_data": storage_data,
-            "battery_capacity": battery_capacity,
-        }
-    )
-
-shared_power_axis_max = max(
-    compute_shared_power_axis_max(result["dispatch"], load["EE"])
-    for result in scenario_results
-)
-
 january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
 january_week = hours[january_week_mask]
 
@@ -77,43 +22,76 @@ july_week = hours[july_week_mask]
 
 load_est = load["EE"]
 
+### ANALYSIS ###
+
+# a) and c) (see interannual for b))
+
+
+scenarios = [(False, "without storage"),(True, "with storage"),]
+
+scenario_results = []
+
+
+for storage_enabled, scenario_label in scenarios:
+    network = Network(load, wind_cf, solar_cf, hours)
+    network.build_network(storage=storage_enabled)
+    network.optimize_network()
+    dispatch, capacities = network.save_results()
+    scenario_results.append(
+        {
+            "storage_enabled": storage_enabled,
+            "scenario_label": scenario_label,
+            "dispatch": dispatch,
+            "capacities": capacities,
+            "soc_axis_max": capacities.get('Battery Storage Estonia', 0) if storage_enabled else 0
+        }
+    )
+
+shared_power_axis_max = max(
+    compute_shared_power_axis_max(result["dispatch"], load["EE"])
+    for result in scenario_results)
+
+
 for result in scenario_results:
     storage_enabled = result["storage_enabled"]
     scenario_label = result["scenario_label"]
     dispatch = result["dispatch"]
-    storage_data = result["storage_data"]
-    battery_capacity = result["battery_capacity"]
-
+    capacities = result["capacities"]
+    soc_axis_max = result["soc_axis_max"]
+    
+    plot_capacity_mix(capacities, f"Optimal Installed Capacity Mix for Estonia 2017 ({scenario_label})")
+    
     plot_dispatch(
         january_week,
         dispatch[january_week_mask],
         load_est[january_week_mask],
-        f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
+        f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})", 
         power_axis_max=shared_power_axis_max,
-        soc_axis_max=battery_capacity,
+        soc_axis_max=soc_axis_max
     )
-
+    
     plot_dispatch(
         july_week,
         dispatch[july_week_mask],
         load_est[july_week_mask],
         f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
         power_axis_max=shared_power_axis_max,
-        soc_axis_max=battery_capacity,
+        soc_axis_max=soc_axis_max
     )
-
-    plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 ({scenario_label})")
+    
+    plot_capacity_mix(capacities, f"Optimal Installed Capacity Mix for Estonia 2017 ({scenario_label})")
     plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
+    
 
-    if storage_data is not None:
+    if storage_enabled:
         plot_storage_operation(
             january_week,
-            storage_data[january_week_mask],
+            dispatch[january_week_mask],
             f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
         )
         plot_storage_operation(
             july_week,
-            storage_data[july_week_mask],
+            dispatch[july_week_mask],
             f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
         )
 
@@ -124,52 +102,46 @@ network.build_network(storage=True, transmission=True, external=True)
 
 network.optimize_network()
 
-dispatch, capacities, storage_data, battery_capacity, dispatch_all = network.display_results()
+dispatch, capacities = network.save_results()
 
-january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
-january_week = hours[january_week_mask]
-
-july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
-july_week = hours[july_week_mask]
-
-load_est = load["EE"]
+soc_max = capacities.get('Battery Storage Estonia', 0)
 
 scenario_label = "with storage and transmission"
 
 shared_power_axis_max = compute_shared_power_axis_max(dispatch, load_est)
 
-# --- PLOTS ---
-plot_dispatch(
+#--- PLOTS ---
+plot_dispatch_with_net_transmission(
     january_week,
     dispatch[january_week_mask],
     load_est[january_week_mask],
     f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
     power_axis_max=shared_power_axis_max,
-    soc_axis_max=battery_capacity,
+    soc_axis_max=soc_max,
 )
 
-plot_dispatch(
+plot_dispatch_with_net_transmission(
     july_week,
     dispatch[july_week_mask],
     load_est[july_week_mask],
     f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
     power_axis_max=shared_power_axis_max,
-    soc_axis_max=battery_capacity,
+    soc_axis_max=soc_max,
 )
 
-plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 ({scenario_label})")
+plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
 plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
 
-if storage_data is not None:
-    plot_storage_operation(
-        january_week,
-        storage_data[january_week_mask],
-        f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
+
+plot_storage_operation(
+    january_week,
+    dispatch[january_week_mask],
+    f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
     )
-    plot_storage_operation(
-        july_week,
-        storage_data[july_week_mask],
-        f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
+plot_storage_operation(
+    july_week,
+    dispatch[july_week_mask],
+    f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
     )
 
 
@@ -177,17 +149,17 @@ if storage_data is not None:
 # e)
 # calculate imbalances in each node for the first hour
 # Finland
-generation_finland = dispatch_all['Wind Generator Finland'].iloc[0] + dispatch_all['Nuclear Finland'].iloc[0]
+generation_finland = dispatch['Wind Generator Finland'].iloc[0] + dispatch['Nuclear Finland'].iloc[0]
 imbalance_finland = generation_finland - load['FI'].iloc[0]
 # Sweden (SE2)
-generation_sweden = dispatch_all['Wind Generator Sweden'].iloc[0] + dispatch_all['Hydro Sweden'].iloc[0]
+generation_sweden = dispatch['Wind Generator Sweden'].iloc[0] + dispatch['Hydro Sweden'].iloc[0]
 imbalance_sweden = generation_sweden - load['SE'].iloc[0]
 # Latvia
-generation_latvia = dispatch_all['Wind Generator Latvia'].iloc[0] + dispatch_all['Coal Latvia'].iloc[0]
+generation_latvia = dispatch['Wind Generator Latvia'].iloc[0] + dispatch['Coal Latvia'].iloc[0]
 imbalance_latvia = generation_latvia - load['LV'].iloc[0]
 
-generation_estonia = dispatch_all['Wind Generator Estonia'].iloc[0] + dispatch_all['Coal Estonia'].iloc[0] + dispatch_all['Solar Generator Estonia'].iloc[0] + dispatch_all['OCGT Estonia'].iloc[0] + dispatch['Battery Storage Discharge'].iloc[0]
-imbalance_estonia = generation_estonia - (load['EE'].iloc[0] + dispatch['Battery Storage Charge'].iloc[0])
+generation_estonia = dispatch['Wind Generator Estonia'].iloc[0] + dispatch['Coal Estonia'].iloc[0] + dispatch['Solar Generator Estonia'].iloc[0] + dispatch['OCGT Estonia'].iloc[0] + dispatch['Battery Discharge Estonia'].iloc[0]
+imbalance_estonia = generation_estonia - (load['EE'].iloc[0] + dispatch['Battery Charge Estonia'].iloc[0])
 
 
 # create dataframe for imbalances
@@ -204,21 +176,45 @@ print(imbalance_df)
 print("Power flows in each line for the first hour:")
 print(network.network.lines_t.p0.loc[network.network.snapshots[0]])
 
-# f) Carbon emission analysis
+# f) CO2 limit analysis
+# https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
+base_co2 = 28_000_000
+    
+scenario_results = []
+    
+co2_limits = [base_co2, 0.2 * base_co2, 0.1 * base_co2, 0.05 * base_co2] # in tons of CO2
+    
+for co2_limit in co2_limits:
+    network = Network(load, wind_cf, solar_cf, hours=hours)
+        
+    network.build_network(storage=True)
+        
+    network.add_co2_limit(co2_limit)
+        
+    network.optimize_network()
+        
+    _, capacities = network.save_results()
+        
+    scenario_results.append(
+            {
+                "co2_limit": co2_limit,
+                "capacities": capacities,
+            }
+        )
 
-scenario_results = network.global_carbon_analysis()
-
-plot_annual_energy_mix_vs_co2_limits(scenario_results, f"Annual Energy Mix for 2017 under Different CO2 Emission Limits", show=False, save=True)
+plot_capacities_vs_co2_limits(scenario_results, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
 
 # g) Add gas transmission network
-network.build_network(storage=True, transmission=True, external=True, gas_transmission=True)
+
+network = Network(load,wind_cf, solar_cf, hours=hours)
+
+network.build_network(storage=True, transmission=True, external=True, gas=True)
 
 network.optimize_network()
 
-dispatch, capacities, storage_data, battery_capacity, dispatch_all = network.display_results()
+dispatch, capacities = network.save_results()
 
-# plot energy mix with gas transmission
-plot_annual_energy_mix(dispatch, f"Annual Energy Mix for 2017 with Gas Transmission", show=False, save=True)
+plot_total_transmission_comparison(dispatch, title="Total Transported Energy in 2017", show=False, save=True)
 
 # h) Add carbon emission constraints
 network.build_network(storage=True, transmission=True, external=True, gas=True, co2_limit=True, limit=28_000_000 * 0.01)

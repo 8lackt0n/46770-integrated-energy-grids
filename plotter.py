@@ -1,21 +1,23 @@
-import matplotlib.pyplot as plt
 import os
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
-def _dispatch_series(df):
-    colors, _ = color_palette()
-    series = [
-        ("Wind Generator Estonia", "Wind Production [MWh]", colors[13]),
-        ("Solar Generator Estonia", "PV Production [MWh]", colors[12]),
-        ("OCGT Estonia", "Gas Production [MWh]", colors[14]),
-        ("Coal Estonia", "Coal Production [MWh]", colors[15]),
-    ]
+# def _dispatch_series(df):
+#     colors, _ = color_palette()
+#     series = [
+#         ("Wind Generator Estonia", "Wind Production [MWh]", colors[13]),
+#         ("Solar Generator Estonia", "PV Production [MWh]", colors[12]),
+#         ("OCGT Estonia", "Gas Production [MWh]", colors[14]),
+#         ("Coal Estonia", "Coal Production [MWh]", colors[15]),
+#     ]
 
-    if "Battery Storage Discharge" in df.columns:
-        series.append(("Battery Storage Discharge", "Battery Discharge [MWh]", colors[9]))
+#     if "Battery Storage Discharge" in df.columns:
+#         series.append(("Battery Storage Discharge", "Battery Discharge [MWh]", colors[9]))
 
-    return series
+#     return series
 
 
 def color_palette():
@@ -40,107 +42,10 @@ def color_palette():
     ]
     return color_palette, background_color
 
-
 def save_plot(file_name):
     os.makedirs("plots", exist_ok=True)
     output_path = os.path.join("plots", f"{file_name}.png")
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-
-
-def plot_dispatch(time_index, df, load, title, show=False, save=True, power_axis_max=None, soc_axis_max=None):
-    colors, background_color = color_palette()
-
-    fig, ax1 = plt.subplots(figsize=(12, 4))
-    fig.patch.set_facecolor(background_color)
-    ax1.set_facecolor(background_color)
-
-    ax1.set_xlabel("Time")
-    ax1.set_ylabel("Power [MW]")
-
-    ax2 = ax1.twinx()
-    if soc_axis_max is not None:
-        ax2.set_ylim(0, 2*soc_axis_max)
-
-    ax1.text(0.0, 1.07, title, transform=ax1.transAxes, fontsize=14,
-            color="black", ha="left", fontweight="bold")
-    subtitle = "Wind, Solar, Gas, and Coal Production in MWh"
-    if "Battery Storage Discharge" in df.columns:
-        subtitle = "Wind, Solar, Gas, Coal, and Battery Dynamics in MWh"
-
-    ax1.text(0.0, 1.01, subtitle,
-            transform=ax1.transAxes, fontsize=10, color="black", ha="left")
-
-    ax1.spines["top"].set_visible(False)
-    ax1.spines["right"].set_visible(False)
-
-    dispatch_series = _dispatch_series(df)
-    stack_values = [df[col] for col, _, _ in dispatch_series]
-    stack_labels = [label for _, label, _ in dispatch_series]
-    stack_colors = [color for _, _, color in dispatch_series]
-
-    ax1.stackplot(time_index,
-                  *stack_values,
-                  labels=stack_labels,
-                  colors=stack_colors)
-
-    total_generation = np.sum(np.vstack([np.asarray(values) for values in stack_values]), axis=0)
-    load_values = np.asarray(load)
-    charging_mask = total_generation > load_values
-
-    if np.any(charging_mask):
-        ax1.fill_between(
-            time_index,
-            load_values,
-            total_generation,
-            where=charging_mask,
-            facecolor="none",
-            edgecolor=colors[9],
-            hatch="///",
-            linewidth=0,
-            label="Battery Charge (MWh)",
-            zorder=2.5,
-        )
-
-    if "Battery Storage SoC" in df.columns:
-        soc_values = np.asarray(df["Battery Storage SoC"])
-        ax2.plot(
-            time_index,
-            soc_values,
-            color=colors[1],
-            linewidth=1.8,
-            linestyle=":",
-            label="Battery State of Charge [MWh]",
-        )
-        ax2.set_ylabel("State of Charge [MWh]")
-
-    ax1.plot(time_index, load, label='Load [MWh]', color='black', linewidth=2)
-    if power_axis_max is not None:
-        ax1.set_ylim(0, power_axis_max)
-    ax1.set_xlabel('Time')
-    ax1.text(0.0, 1.07, title, transform=ax1.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
-    ax1.text(0.0, 1.01, subtitle, transform=ax1.transAxes, fontsize=10, color='black', ha='left')
-    lines_1, labels_1 = ax1.get_legend_handles_labels()
-    lines_2, labels_2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, bbox_to_anchor=(0.5, -0.16), ncol=4, loc='upper center')
-    ax1.spines['top'].set_visible(False)
-    ax1.spines['right'].set_visible(False)
-
-    # print df columns and head for debugging 2017-01-01 to 2017-01-02
-    print("Debugging DataFrame (2017-01-01 to 2017-01-02):")
-    print(df.loc['2017-01-01':'2017-01-02'])
-    print("DataFrame columns:", df.columns)
-    print("DataFrame head:")
-    print(df.head())
-
-    if save:
-        fig_title = title.replace(" ", "_").lower()
-        print("Saving:", fig_title)
-        save_plot(fig_title)
-
-    if show:
-        plt.show()
-    #plt.close(fig)
-
 
 def plot_annual_energy_mix(df, title, show=False, save=True):
     colors, background_color = color_palette()
@@ -190,6 +95,7 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
         plt.show()
 
 def plot_duration_curve(df, title, show=False, save=True):
+
     colors, background_color = color_palette()
 
     series = [
@@ -198,45 +104,59 @@ def plot_duration_curve(df, title, show=False, save=True):
         ("OCGT Estonia", "Gas", colors[14]),
         ("Coal Estonia", "Coal", colors[15]),
     ]
-    if "Battery Storage Discharge" in df.columns:
-        series.append(("Battery Storage Discharge", "Battery Discharge", colors[9]))
 
-    hours = range(len(df))
+    if "Battery Discharge Estonia" in df.columns:
+        series.append(("Battery Discharge Estonia", "Battery Discharge", colors[9]))
 
     fig, ax = plt.subplots(figsize=(12, 4))
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
 
     for col, label, color in series:
-        sorted_values = df[col].sort_values(ascending=False).reset_index(drop=True)
-        ax.plot(hours, sorted_values, label=label, color=color)
+        if col in df.columns:
+            sorted_values = df[col].sort_values(ascending=False).reset_index(drop=True)
+            hours = range(len(sorted_values))
+            ax.plot(hours, sorted_values, label=label, color=color)
 
     ax.set_xlabel("Hours (sorted)", labelpad=5)
-    ax.set_ylabel("Generation [MWh]")
+    ax.set_ylabel("Generation [MW]")
 
-    ax.text(0.0, 1.07,
+    ax.text(
+        0.0, 1.07,
         title,
         transform=ax.transAxes,
         fontsize=14,
+        color="black",
+        ha="left",
         fontweight="bold"
     )
 
-    ax.text(0.0, 1.01,
-        "Sorted hourly generation for each technology",
+    subtitle = "Sorted hourly generation for each technology"
+    if "Battery Discharge Estonia" in df.columns:
+        subtitle = "Sorted hourly generation and battery discharge for each technology"
+
+    ax.text(
+        0.0, 1.01,
+        subtitle,
         transform=ax.transAxes,
-        fontsize=10
+        fontsize=10,
+        color="black",
+        ha="left"
     )
 
-    # Keep the legend below the x-axis label and use one row when possible.
     ax.legend(
         bbox_to_anchor=(0.5, -0.16),
         ncol=len(series),
         loc="upper center",
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
     )
+
     fig.subplots_adjust(bottom=0.25)
 
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
 
     if save:
         fig_title = title.replace(" ", "_").lower()
@@ -291,47 +211,116 @@ def plot_capacity_variability(capacity_df, title, show=False, save=True):
     if show:
         plt.show()
 
+def plot_storage_operation(time_index, df, title, show=False, save=True):
+    import numpy as np
+    import matplotlib.pyplot as plt
 
-def plot_storage_operation(time_index, storage_df, title, show=False, save=True):
     colors, background_color = color_palette()
 
     fig, ax1 = plt.subplots(figsize=(12, 4))
     fig.patch.set_facecolor(background_color)
     ax1.set_facecolor(background_color)
 
+    # Get columns safely
+    charge = np.asarray(df["Battery Charge Estonia"]) if "Battery Charge Estonia" in df.columns else np.zeros(len(time_index))
+    discharge = np.asarray(df["Battery Discharge Estonia"]) if "Battery Discharge Estonia" in df.columns else np.zeros(len(time_index))
+    soc = np.asarray(df["Battery SoC Estonia"]) if "Battery SoC Estonia" in df.columns else np.zeros(len(time_index))
+
+    # Plot discharge positive, charge negative
     ax1.step(
         time_index,
-        storage_df["Battery Storage Discharge"],
-        label="Battery Discharge [MWh]",
+        discharge,
+        where="mid",
+        label="Battery Discharge [MW]",
         color=colors[9],
+        linewidth=1.8,
     )
+
     ax1.step(
         time_index,
-        storage_df["Battery Storage Charge"],
-        label="Battery Charge [MWh]",
-        color=colors[9],
+        -charge,
+        where="mid",
+        label="Battery Charge [MW]",
+        color=colors[1],
+        linewidth=1.8,
     )
+
+    # Optional fill for readability
+    ax1.fill_between(
+        time_index, 0, discharge,
+        step="mid",
+        alpha=0.25,
+        color=colors[9]
+    )
+    ax1.fill_between(
+        time_index, 0, -charge,
+        step="mid",
+        alpha=0.25,
+        color=colors[1]
+    )
+
+    ax1.axhline(0, color="black", linewidth=0.8)
     ax1.set_ylabel("Power [MW]")
 
+    # Secondary axis for SoC
     ax2 = ax1.twinx()
-    ax2.plot(
+    ax2.step(
         time_index,
-        storage_df["Battery Storage SoC"],
+        soc,
+        where="mid",
         label="Battery State of Charge [MWh]",
         color="black",
         linewidth=2,
+        linestyle=":"
     )
     ax2.set_ylabel("State of Charge [MWh]")
 
-    ax1.text(0.0, 1.07, title, transform=ax1.transAxes, fontsize=14, color="black", ha="left", fontweight="bold")
-    ax1.text(0.0, 1.01, "Battery charging, discharging, and state of charge", transform=ax1.transAxes, fontsize=10, color="black", ha="left")
+    # Titles
+    ax1.text(
+        0.0, 1.07, title,
+        transform=ax1.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+    ax1.text(
+        0.0, 1.01,
+        "Battery charging, discharging, and state of charge",
+        transform=ax1.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
 
+    # Legend
     lines_1, labels_1 = ax1.get_legend_handles_labels()
     lines_2, labels_2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, bbox_to_anchor=(0.5, -0.16), ncol=3, loc="upper center")
+    ax1.legend(
+        lines_1 + lines_2,
+        labels_1 + labels_2,
+        bbox_to_anchor=(0.5, -0.16),
+        ncol=3,
+        loc="upper center",
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
 
+    # Styling
     ax1.spines["top"].set_visible(False)
     ax2.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    # Symmetric power axis
+    max_power = max(np.max(charge), np.max(discharge), 1)
+    ax1.set_ylim(-1.15 * max_power, 1.15 * max_power)
+
+    # Optional SoC limits
+    if np.max(soc) > 0:
+        ax2.set_ylim(0, 1.1 * np.max(soc))
+
+    fig.subplots_adjust(bottom=0.25)
 
     if save:
         fig_title = title.replace(" ", "_").lower()
@@ -341,7 +330,9 @@ def plot_storage_operation(time_index, storage_df, title, show=False, save=True)
     if show:
         plt.show()
 
-def plot_annual_energy_mix_vs_co2_limits(scenario_results, title, show=False, save=True):
+def plot_capacities_vs_co2_limits(scenario_results, title, show=False, save=True):
+    
+
     colors, background_color = color_palette()
 
     components = [
@@ -349,41 +340,34 @@ def plot_annual_energy_mix_vs_co2_limits(scenario_results, title, show=False, sa
         ("Solar Generator Estonia", "Solar", colors[12]),
         ("OCGT Estonia", "Gas", colors[14]),
         ("Coal Estonia", "Coal", colors[15]),
-        ("Battery Storage Discharge", "Battery Discharge", colors[9]),
+        ("Battery Storage Estonia", "Battery", colors[9]),
     ]
 
-    # Build annual generation table
     rows = []
     for scenario in scenario_results:
-        dispatch = scenario["dispatch"]
+        capacities = scenario["capacities"]
         limit = scenario["co2_limit"]
 
         row = {"co2_limit": limit}
 
-        for col_name, label, _ in components:
-            if col_name in dispatch.columns:
-                row[label] = dispatch[col_name].sum()
+        # Handle DataFrame with column p_nom_opt
+        if isinstance(capacities, pd.DataFrame):
+            if "p_nom_opt" in capacities.columns:
+                capacities_series = capacities["p_nom_opt"]
             else:
-                row[label] = 0.0
+                capacities_series = capacities.iloc[:, 0]
+        else:
+            capacities_series = capacities
+
+        for comp_name, label, _ in components:
+            row[label] = capacities_series.get(comp_name, 0.0)
 
         rows.append(row)
 
     df_plot = pd.DataFrame(rows)
 
-    # Sort by CO2 limit descending
     df_plot = df_plot.sort_values("co2_limit", ascending=False).reset_index(drop=True)
-
-    # Convert to percentages
-    generation_cols = [label for _, label, _ in components]
-    row_totals = df_plot[generation_cols].sum(axis=1)
-
-    # Avoid division by zero
-    df_percent = df_plot.copy()
-    df_percent[generation_cols] = df_percent[generation_cols].div(row_totals.replace(0, np.nan), axis=0) * 100
-    df_percent[generation_cols] = df_percent[generation_cols].fillna(0)
-
-    # X labels
-    df_percent["co2_label"] = [f"{x:.0f}" for x in df_percent["co2_limit"]]
+    df_plot["co2_label"] = [f"{x/1000:.0f}" for x in df_plot["co2_limit"]]
 
     labels = [label for _, label, _ in components]
     stack_colors = [color for _, _, color in components]
@@ -392,12 +376,12 @@ def plot_annual_energy_mix_vs_co2_limits(scenario_results, title, show=False, sa
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
 
-    bottom = np.zeros(len(df_percent))
+    bottom = np.zeros(len(df_plot))
 
     for label, color in zip(labels, stack_colors):
-        values = df_percent[label].values
+        values = df_plot[label].values
         ax.bar(
-            df_percent["co2_label"],
+            df_plot["co2_label"],
             values,
             bottom=bottom,
             label=label,
@@ -418,29 +402,699 @@ def plot_annual_energy_mix_vs_co2_limits(scenario_results, title, show=False, sa
 
     ax.text(
         0.0, 1.01,
-        "Technology share of annual generation (%) for each CO2 limit",
+        "Installed capacity by technology for each CO2 limit in MW",
         transform=ax.transAxes,
         fontsize=10,
         color="black",
         ha="left"
     )
 
-    ax.set_xlabel("CO2 limit [tCO2]")
-    ax.set_ylabel("Share of annual generation [%]")
-    ax.set_ylim(0, 100)
+    ax.set_xlabel("CO2 limit [ktCO2]")
+    ax.set_ylabel("Installed capacity [MW]")
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
 
     ax.legend(
-        bbox_to_anchor=(1.02, 0.5),
-        loc="center left",
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        ncol=5,
         frameon=True,
         facecolor="white",
         framealpha=1,
     )
 
     fig.subplots_adjust(right=0.82)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+        
+def plot_total_transmission_comparison(transmission_df, title, show=False, save=True):
+    colors, background_color = color_palette()
+
+    gas_columns = [
+        "FIN-SWE Gas Pipeline",
+        "EST-FIN Gas Pipeline",
+        "EST-SWE Gas Pipeline",
+        "EST-LAT Gas Pipeline",
+    ]
+
+    electrical_columns = [
+        "FIN-SWE",
+        "EST-FIN",
+        "EST-SWE",
+        "EST-LAT",
+    ]
+
+    # Keep only columns that actually exist
+    gas_columns_existing = [col for col in gas_columns if col in transmission_df.columns]
+    electrical_columns_existing = [col for col in electrical_columns if col in transmission_df.columns]
+
+    total_gas = transmission_df[gas_columns_existing].abs().sum().sum() / 1000 if gas_columns_existing else 0.0
+    total_electric = transmission_df[electrical_columns_existing].abs().sum().sum() / 1000 if electrical_columns_existing else 0.0
+
+    plot_df = pd.DataFrame({
+        "Transmission Type": ["Electrical", "Gas"],
+        "Total Flow": [total_electric, total_gas]
+    })
+
+    bar_colors = [colors[0], colors[14]]
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    ax.bar(
+        plot_df["Transmission Type"],
+        plot_df["Total Flow"],
+        color=bar_colors,
+        edgecolor="white",
+        linewidth=0.5
+    )
+
+    ax.text(
+        0.0, 1.07, title,
+        transform=ax.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    ax.text(
+        0.0, 1.01,
+        "Total transported energy through electrical and gas transmission in GWh",
+        transform=ax.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax.set_ylabel("Total transmission [GWh]")
+    ax.set_xlabel("")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+
+def plot_capacity_mix(capacities, title, show=False, save=True):
+
+    colors, background_color = color_palette()
+
+    # Always take p_nom_opt column
+    capacities = capacities["p_nom_opt"]
+
+    # Handle duplicate indices
+    capacities = capacities.groupby(capacities.index).sum()
+
+    components = [
+        ("Wind Generator Estonia", "Wind", colors[13]),
+        ("Solar Generator Estonia", "Solar", colors[12]),
+        ("OCGT Estonia", "Gas", colors[14]),
+        ("Coal Estonia", "Coal", colors[15]),
+    ]
+
+    # Add battery only if present
+    if "Battery Storage Estonia" in capacities.index:
+        components.append(("Battery Storage Estonia", "Battery", colors[9]))
+
+    values = [capacities.loc[col] if col in capacities.index else 0.0 for col, _, _ in components]
+    labels = [label for _, label, _ in components]
+    stack_colors = [color for _, _, color in components]
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    bottom = 0.0
+
+    for value, label, color in zip(values, labels, stack_colors):
+        if value == 0:
+            continue
+
+        ax.bar(
+            "Estonia",
+            value,
+            bottom=bottom,
+            label=label,
+            color=color,
+            edgecolor="white",
+            linewidth=0.5
+        )
+        bottom += value
+
+    ax.text(
+        0.0, 1.07, title,
+        transform=ax.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    subtitle = "Installed capacity mix [MW]"
+    if "Battery Storage Estonia" in capacities.index:
+        subtitle = "Installed capacity mix (incl. battery) [MW]"
+
+    ax.text(
+        0.0, 1.01,
+        subtitle,
+        transform=ax.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax.set_ylabel("Installed capacity [MW]")
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    ax.legend(
+        loc="center left",
+        bbox_to_anchor=(1.07, 0.5),
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
+
+    fig.subplots_adjust(right=0.95)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+
+def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
+
+    colors, background_color = color_palette()
+
+    countries = ["Estonia", "Finland", "Sweden", "Latvia"]
+
+    technologies = [
+        ("Wind", colors[13]),
+        ("Solar", colors[12]),
+        ("Gas", colors[14]),
+        ("Coal", colors[15]),
+        ("Nuclear", colors[8]),
+        ("Hydro", colors[11]),
+        ("Battery", colors[9]),
+    ]
+
+    # If duplicate asset names exist, combine them
+    capacities = capacities.groupby(capacities.index).sum(numeric_only=True)
+
+    # Empty table: rows=countries, cols=technologies
+    df_plot = pd.DataFrame(
+        0.0,
+        index=countries,
+        columns=[tech for tech, _ in technologies]
+    )
+
+    # Iterate over asset rows
+    for asset_name, row in capacities.iterrows():
+        if not isinstance(asset_name, str):
+            continue
+
+        # Skip transmission lines/interconnectors
+        if "-" in asset_name:
+            continue
+
+        # Find country
+        country = None
+        for c in countries:
+            if asset_name.endswith(c):
+                country = c
+                break
+
+        if country is None:
+            continue
+
+        # Choose the right capacity column
+        p_nom = row["p_nom_opt"] if "p_nom_opt" in capacities.columns and pd.notna(row["p_nom_opt"]) else 0.0
+        s_nom = row["s_nom_opt"] if "s_nom_opt" in capacities.columns and pd.notna(row["s_nom_opt"]) else 0.0
+
+        # Classify technology
+        if "Battery Storage" in asset_name:
+            df_plot.loc[country, "Battery"] += p_nom
+        elif "Wind" in asset_name:
+            df_plot.loc[country, "Wind"] += p_nom
+        elif "Solar" in asset_name:
+            df_plot.loc[country, "Solar"] += p_nom
+        elif "OCGT" in asset_name or "Gas" in asset_name:
+            df_plot.loc[country, "Gas"] += p_nom
+        elif "Coal" in asset_name:
+            df_plot.loc[country, "Coal"] += p_nom
+        elif "Nuclear" in asset_name:
+            df_plot.loc[country, "Nuclear"] += p_nom
+        elif "Hydro" in asset_name:
+            df_plot.loc[country, "Hydro"] += p_nom
+
+    fig, ax = plt.subplots(figsize=(12, 6))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    x = np.arange(len(countries))
+    bottom = np.zeros(len(countries))
+    plotted = False
+
+    for tech, color in technologies:
+        values = df_plot[tech].values
+        if np.all(values == 0):
+            continue
+
+        ax.bar(
+            x,
+            values,
+            bottom=bottom,
+            label=tech,
+            color=color,
+            edgecolor="white",
+            linewidth=0.5,
+        )
+        bottom += values
+        plotted = True
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(countries)
+    ax.set_ylabel("Installed capacity [MW]")
+
+    ax.text(
+        0.0, 1.07,
+        title,
+        transform=ax.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold",
+    )
+
+    ax.text(
+        0.0, 1.01,
+        "Installed generator and storage capacity by country [MW]",
+        transform=ax.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left",
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if plotted:
+        ax.legend(
+            loc="upper center",
+            bbox_to_anchor=(0.5, -0.12),
+            ncol=4,
+            frameon=True,
+            facecolor="white",
+            framealpha=1,
+        )
+
+    fig.subplots_adjust(bottom=0.22)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+        
+def plot_dispatch(time_index, df, load, title, show=False, save=True,
+                  power_axis_max=None, soc_axis_max=None):
+
+    colors, background_color = color_palette()
+
+    fig, ax1 = plt.subplots(figsize=(12, 4))
+    fig.patch.set_facecolor(background_color)
+    ax1.set_facecolor(background_color)
+
+    ax2 = None
+
+    components = [
+        ("Coal Estonia", "Coal", colors[15]),
+        ("Wind Generator Estonia", "Wind", colors[13]),
+        ("Solar Generator Estonia", "Solar", colors[12]),
+        ("OCGT Estonia", "Gas", colors[14]),
+    ]
+
+    if "Battery Discharge Estonia" in df.columns:
+        components.append(("Battery Discharge Estonia", "Battery Discharge", colors[9]))
+
+    stack_values = []
+    stack_labels = []
+    stack_colors = []
+
+    for col, label, color in components:
+        if col in df.columns:
+            stack_values.append(np.asarray(df[col]))
+            stack_labels.append(label)
+            stack_colors.append(color)
+
+    if len(stack_values) > 0:
+        ax1.stackplot(
+            time_index,
+            *stack_values,
+            labels=stack_labels,
+            colors=stack_colors
+        )
+
+    load_values = np.asarray(load)
+    ax1.plot(time_index, load_values, color="black", linewidth=2, label="Load [MW]")
+
+    total_generation = np.sum(np.vstack(stack_values), axis=0) if len(stack_values) > 0 else np.zeros(len(time_index))
+
+    # Battery charge as hatched area at top of generation stack
+    if "Battery Charge Estonia" in df.columns and len(stack_values) > 0:
+        charge_values = np.asarray(df["Battery Charge Estonia"])
+
+        charging_mask = charge_values > 0
+        if np.any(charging_mask):
+            upper_bound = total_generation
+            lower_bound = total_generation - charge_values
+
+            ax1.fill_between(
+                time_index,
+                lower_bound,
+                upper_bound,
+                where=charging_mask,
+                facecolor="none",
+                edgecolor=colors[9],
+                hatch="///",
+                linewidth=0,
+                label="Battery Charge [MW]",
+                zorder=2.5,
+            )
+
+    if "Battery SoC Estonia" in df.columns:
+        ax2 = ax1.twinx()
+        soc_values = np.asarray(df["Battery SoC Estonia"])
+
+        ax2.step(
+            time_index,
+            soc_values,
+            color=colors[1],
+            linewidth=1.8,
+            linestyle=":",
+            label="Battery State of Charge [MWh]",
+        )
+        ax2.set_ylabel("State of Charge [MWh]")
+
+        if soc_axis_max is not None:
+            ax2.set_ylim(soc_axis_max * 1.1)
+            
+        ax2.spines["top"].set_visible(False)
+
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Power [MW]")
+
+    if power_axis_max is not None:
+        ax1.set_ylim(0, power_axis_max)
+    else:
+        ymax = max(np.max(total_generation), np.max(load_values)) * 1.1
+        ax1.set_ylim(0, ymax)
+
+    subtitle = "Wind, Solar, Gas, and Coal dispatch [MW]"
+    if "Battery Discharge Estonia" in df.columns or "Battery SoC Estonia" in df.columns:
+        subtitle = "Wind, Solar, Gas, Coal, and battery dispatch dynamics [MW/MWh]"
+
+    ax1.text(
+        0.0, 1.07, title,
+        transform=ax1.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    ax1.text(
+        0.0, 1.01, subtitle,
+        transform=ax1.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    if ax2 is not None:
+        lines_2, labels_2 = ax2.get_legend_handles_labels()
+    else:
+        lines_2, labels_2 = [], []
+
+    ax1.legend(
+        lines_1 + lines_2,
+        labels_1 + labels_2,
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=4,
+        loc="upper center",
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
+
+    fig.subplots_adjust(bottom=0.25)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+        
+def plot_dispatch_with_net_transmission(
+    time_index, df, load, title, show=False, save=True,
+    power_axis_max=None, soc_axis_max=None
+):
+    import numpy as np
+    import matplotlib.pyplot as plt
+
+    colors, background_color = color_palette()
+
+    fig, ax1 = plt.subplots(figsize=(12, 4))
+    fig.patch.set_facecolor(background_color)
+    ax1.set_facecolor(background_color)
+
+    ax2 = None
+
+    components = [
+        ("Coal Estonia", "Coal", colors[15]),
+        ("Wind Generator Estonia", "Wind", colors[13]),
+        ("Solar Generator Estonia", "Solar", colors[12]),
+        ("OCGT Estonia", "Gas", colors[14]),
+    ]
+
+    if "Battery Discharge Estonia" in df.columns:
+        components.append(("Battery Discharge Estonia", "Battery Discharge", colors[9]))
+
+    stack_values = []
+    stack_labels = []
+    stack_colors = []
+
+    for col, label, color in components:
+        if col in df.columns:
+            stack_values.append(np.asarray(df[col]))
+            stack_labels.append(label)
+            stack_colors.append(color)
+
+    # Domestic generation stack
+    if stack_values:
+        ax1.stackplot(
+            time_index,
+            *stack_values,
+            labels=stack_labels,
+            colors=stack_colors
+        )
+
+    load_values = np.asarray(load)
+    ax1.plot(time_index, load_values, color="black", linewidth=2, label="Load [MW]")
+
+    domestic_generation = (
+        np.sum(np.vstack(stack_values), axis=0)
+        if stack_values else np.zeros(len(time_index))
+    )
+
+    # ---------------------------------
+    # Net interchange for Estonia
+    # positive => net import to Estonia
+    # negative => net export from Estonia
+    # ---------------------------------
+    net_import_est = np.zeros(len(time_index))
+
+    line_cols = [col for col in df.columns if "EST" in col and "-" in col]
+
+    for col in line_cols:
+        flow = np.asarray(df[col])
+        left, right = col.split("-")
+
+        if left == "EST":
+            # positive flow means export from EST
+            # so import to EST is negative of that
+            net_import_est += -flow
+
+        elif right == "EST":
+            # positive flow means import to EST
+            net_import_est += flow
+
+    imports_est = np.clip(net_import_est, 0, None)
+    exports_est = np.clip(-net_import_est, 0, None)
+
+    # Full import band on top of domestic generation
+    available_supply = domestic_generation + imports_est
+    import_mask = imports_est > 0
+
+    if np.any(import_mask):
+        ax1.fill_between(
+            time_index,
+            domestic_generation,
+            available_supply,
+            where=import_mask,
+            facecolor='none',
+            edgecolor=colors[1],
+            hatch='\\\\\\\\',
+            linewidth=0,
+            label="Net Import to Estonia [MW]",
+            zorder=2.6,
+        )
+
+    # Battery charge as scrape from top
+    available_after_charge = available_supply.copy()
+
+    if "Battery Charge Estonia" in df.columns:
+        charge_values = np.asarray(df["Battery Charge Estonia"])
+        charging_mask = charge_values > 0
+
+        if np.any(charging_mask):
+            lower_bound = available_supply - charge_values
+            upper_bound = available_supply
+
+            ax1.fill_between(
+                time_index,
+                lower_bound,
+                upper_bound,
+                where=charging_mask,
+                facecolor="none",
+                edgecolor=colors[9],
+                hatch="///",
+                linewidth=0,
+                label="Battery Charge [MW]",
+                zorder=2.7,
+            )
+
+            available_after_charge = available_supply - charge_values
+
+    # Net exports as scrape after charging
+    export_mask = exports_est > 0
+    if np.any(export_mask):
+        lower_bound = available_after_charge - exports_est
+        upper_bound = available_after_charge
+
+        ax1.fill_between(
+            time_index,
+            lower_bound,
+            upper_bound,
+            where=export_mask,
+            facecolor="none",
+            edgecolor=colors[11],
+            hatch="\\\\\\",
+            linewidth=0,
+            label="Net Export from Estonia [MW]",
+            zorder=2.8,
+        )
+
+    # SoC on secondary axis
+    if "Battery SoC Estonia" in df.columns:
+        ax2 = ax1.twinx()
+        soc_values = np.asarray(df["Battery SoC Estonia"])
+
+        ax2.step(
+            time_index,
+            soc_values,
+            color=colors[1],
+            linewidth=1.8,
+            linestyle=":",
+            label="Battery State of Charge [MWh]",
+        )
+        ax2.set_ylabel("State of Charge [MWh]")
+
+        if soc_axis_max is not None:
+            ax2.set_ylim(soc_axis_max * 1.1)
+
+        ax2.spines["top"].set_visible(False)
+
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Power [MW]")
+
+    if power_axis_max is not None:
+        ax1.set_ylim(0, power_axis_max)
+    else:
+        ymax = max(
+            np.max(available_supply) if len(available_supply) > 0 else 0,
+            np.max(load_values)
+        ) * 1.1
+        ax1.set_ylim(0, ymax)
+
+    subtitle = "Domestic dispatch, battery dynamics, and Estonia net imports/exports [MW/MWh]"
+
+    ax1.text(
+        0.0, 1.07,
+        title,
+        transform=ax1.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    ax1.text(
+        0.0, 1.01,
+        subtitle,
+        transform=ax1.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    if ax2 is not None:
+        lines_2, labels_2 = ax2.get_legend_handles_labels()
+    else:
+        lines_2, labels_2 = [], []
+
+    ax1.legend(
+        lines_1 + lines_2,
+        labels_1 + labels_2,
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=4,
+        loc="upper center",
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
+
+    fig.subplots_adjust(bottom=0.28)
 
     if save:
         fig_title = title.replace(" ", "_").lower()
