@@ -749,9 +749,9 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True,
 
     components = [
         ("Coal Estonia", "Coal", colors[15]),
+        ("OCGT Estonia", "Gas", colors[14]),
         ("Wind Generator Estonia", "Wind", colors[13]),
         ("Solar Generator Estonia", "Solar", colors[12]),
-        ("OCGT Estonia", "Gas", colors[14]),
     ]
 
     if "Battery Discharge Estonia" in df.columns:
@@ -898,9 +898,10 @@ def plot_dispatch_with_net_transmission(
 
     components = [
         ("Coal Estonia", "Coal", colors[15]),
+        ("OCGT Estonia", "Gas", colors[14]),
         ("Wind Generator Estonia", "Wind", colors[13]),
         ("Solar Generator Estonia", "Solar", colors[12]),
-        ("OCGT Estonia", "Gas", colors[14]),
+        
     ]
 
     if "Battery Discharge Estonia" in df.columns:
