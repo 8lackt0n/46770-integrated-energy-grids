@@ -169,12 +169,16 @@ imbalance_df = pd.DataFrame({
     "Latvia": imbalance_latvia,
     "Estonia": imbalance_estonia
 }, index=[dispatch.index[0]])
+print("--------------------------------------------------------")
+
 print("Imbalances in each node for the first hour:")
 print(imbalance_df)
 
 # print power flows in each line for the first hour
 print("Power flows in each line for the first hour:")
 print(network.network.lines_t.p0.loc[network.network.snapshots[0]])
+print("--------------------------------------------------------")
+
 
 # f) CO2 limit analysis
 # https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
@@ -222,4 +226,7 @@ network.build_network(storage=True, transmission=True, external=True, gas=True, 
 network.optimize_network()
 
 co2_price = network.network.global_constraints.mu
+print("--------------------------------------------------------")
+print("CO2 Price: ")
 print(co2_price)
+print("--------------------------------------------------------")
