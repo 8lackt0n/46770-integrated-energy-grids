@@ -26,6 +26,8 @@ for year in years:
     load_year = load_year.copy()
     load_year.index = hours
 
+    print(np.mean(solar_cf["EE"]))
+    print(np.mean(wind_cf["EE"]))
     print(len(load_year), len(wind_cf), len(solar_cf), len(hours))
 
     network = Network(load_year, wind_cf, solar_cf, hours)

@@ -544,14 +544,27 @@ def plot_capacity_mix(capacities, title, show=False, save=True):
         if value == 0:
             continue
 
-        ax.bar(
+        bars = ax.bar(
             "Estonia",
             value,
             bottom=bottom,
             label=label,
             color=color,
-            edgecolor="white",
+            edgecolor="black",
             linewidth=0.5
+        )
+
+        # Annotate each stacked segment with its capacity value.
+        bar = bars[0]
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bottom + value / 2,
+            f"{value:.0f}",
+            ha="center",
+            va="center",
+            fontsize=9,
+            color="black",
+            fontweight="bold",
         )
         bottom += value
 
@@ -672,13 +685,20 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
     x = np.arange(len(countries))
     bottom = np.zeros(len(countries))
     plotted = False
+    totals = df_plot.sum(axis=1).values
+
+    inside_label_fraction = 0.08
+    inside_label_min_abs = 120.0
+    outside_x_offset = 0.18
+    outside_label_min_gap = max(np.max(totals) * 0.02, 25.0) if len(totals) > 0 else 25.0
+    outside_label_positions = {i: [] for i in range(len(countries))}
 
     for tech, color in technologies:
         values = df_plot[tech].values
         if np.all(values == 0):
             continue
 
-        ax.bar(
+        bars = ax.bar(
             x,
             values,
             bottom=bottom,
@@ -687,12 +707,58 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
             edgecolor="white",
             linewidth=0.5,
         )
+
+        for i, (bar, value) in enumerate(zip(bars, values)):
+            if value <= 0:
+                continue
+
+            y_center = bottom[i] + value / 2
+            inside_threshold = max(inside_label_min_abs, inside_label_fraction * totals[i])
+
+            if value >= inside_threshold:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    y_center,
+                    f"{value:.0f}",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color="black",
+                    fontweight="bold",
+                )
+            else:
+                y_text = y_center
+                while any(abs(y_text - y_used) < outside_label_min_gap for y_used in outside_label_positions[i]):
+                    y_text += outside_label_min_gap
+                outside_label_positions[i].append(y_text)
+
+                x_center = bar.get_x() + bar.get_width() / 2
+                x_right = bar.get_x() + bar.get_width()
+
+                ax.annotate(
+                    f"{value:.0f}",
+                    xy=(x_right, y_center),
+                    xytext=(x_center + outside_x_offset, y_text),
+                    ha="left",
+                    va="center",
+                    fontsize=8,
+                    color="black",
+                    arrowprops=dict(
+                        arrowstyle="-",
+                        color="black",
+                        linewidth=0.6,
+                        shrinkA=0,
+                        shrinkB=0,
+                    ),
+                )
+
         bottom += values
         plotted = True
 
     ax.set_xticks(x)
     ax.set_xticklabels(countries)
     ax.set_ylabel("Installed capacity [MW]")
+    ax.set_xlim(-0.5, len(countries) - 0.5 + 0.85)
 
     ax.text(
         0.0, 1.07,
