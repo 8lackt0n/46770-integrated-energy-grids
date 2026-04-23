@@ -563,8 +563,7 @@ def plot_capacity_mix(capacities, title, show=False, save=True):
             ha="center",
             va="center",
             fontsize=9,
-            color="black",
-            fontweight="bold",
+            color="white",
         )
         bottom += value
 
@@ -723,8 +722,8 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
                     ha="center",
                     va="center",
                     fontsize=8,
-                    color="black",
-                    fontweight="bold",
+                    color="white",
+
                 )
             else:
                 y_text = y_center
@@ -742,10 +741,10 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
                     ha="left",
                     va="center",
                     fontsize=8,
-                    color="black",
+                    color="white",
                     arrowprops=dict(
                         arrowstyle="-",
-                        color="black",
+                        color="white",
                         linewidth=0.6,
                         shrinkA=0,
                         shrinkB=0,
