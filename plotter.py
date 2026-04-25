@@ -56,41 +56,60 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
         ("OCGT Estonia", "Gas", colors[14]),
         ("Coal Estonia", "Coal", colors[15]),
     ]
-    if "Battery Storage Discharge" in df.columns:
-        components.append(("Battery Storage Discharge", "Battery Discharge", colors[9]))
+
+    if "Battery Discharge Estonia" in df.columns:
+        components.append(("Battery Discharge Estonia", "Battery Discharge", colors[9]))
+
+    # Add net imports if the annual balance is positive.
+    import_columns = [col for col in df.columns if "EST" in col and "-" in col]
+    net_import_to_estonia = 0.0
+    for col in import_columns:
+        flow = df[col].sum()
+        left, right = col.split("-")
+
+        if left == "EST":
+            net_import_to_estonia -= flow
+        elif right == "EST":
+            net_import_to_estonia += flow
+
+    if net_import_to_estonia > 0:
+        components.append(("Net Import to Estonia", "Net Imports", colors[10]))
     
 
     values = [df[col].sum() for col, _, _ in components]
     labels = [label for _, label, _ in components]
-    bar_colors = [color for _, _, color in components]
+    pie_colors = [color for _, _, color in components]
+
+    labels_with_totals = [f"{label}\n({val:.0f} MWh)" for label, val in zip(labels, values)]
     
-    fig, ax = plt.subplots(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(14, 8))
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
     
-    bars = ax.bar(labels, values, color=bar_colors, edgecolor='white', linewidth=0.5)
+    ax.pie(
+        values,
+        labels=labels_with_totals,
+        colors=pie_colors,
+        autopct='%1.1f%%',
+        startangle=90,
+        textprops={'fontsize': 10, 'color': 'black', 'fontweight': 'bold'},
+        wedgeprops={'linewidth': 0.5, 'edgecolor': 'white'},
+        pctdistance=0.75,
+    )
+    ax.set_aspect('equal')
     
-    # Add value labels on top of bars
-    for bar, value in zip(bars, values):
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height(),
-            f'{value:.0f}',
-            ha='center',
-            va='bottom',
-            fontsize=10,
-            fontweight='bold'
-        )
     
     ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
-    annual_subtitle = 'Total Wind, Solar, Gas, and Coal Production in MWh'
-    if "Battery Storage Discharge" in df.columns:
-        annual_subtitle = 'Total Wind, Solar, Gas, Coal, and Battery Discharge in MWh'
+    subtitle_parts = ["Wind", "Solar", "Gas", "Coal"]
+    if "Battery Discharge Estonia" in df.columns:
+        subtitle_parts.append("Battery Discharge")
+    if net_import_to_estonia > 0:
+        subtitle_parts.append("Net Imports")
+    annual_subtitle = "Total " + ", ".join(subtitle_parts[:-1]) + (
+        f", and {subtitle_parts[-1]}" if len(subtitle_parts) > 1 else subtitle_parts[0]
+    ) + " in MWh"
 
     ax.text(0.0, 1.01, annual_subtitle, transform=ax.transAxes, fontsize=10, color='black', ha='left')
-    ax.set_ylabel('Energy Production [MWh]')
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
     
     if save:
         fig_title = title.replace(" ", "_").lower()
@@ -526,10 +545,10 @@ def plot_capacity_mix(capacities, title, show=False, save=True):
     capacities = capacities.groupby(capacities.index).sum()
 
     components = [
+        ("Coal Estonia", "Coal", colors[15]),
+        ("OCGT Estonia", "Gas", colors[14]),
         ("Wind Generator Estonia", "Wind", colors[13]),
         ("Solar Generator Estonia", "Solar", colors[12]),
-        ("OCGT Estonia", "Gas", colors[14]),
-        ("Coal Estonia", "Coal", colors[15]),
     ]
 
     # Add battery only if present
@@ -625,12 +644,12 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
     countries = ["Estonia", "Finland", "Sweden", "Latvia"]
 
     technologies = [
+        ("Nuclear", colors[8]),
+        ("Coal", colors[15]),
+        ("Gas", colors[14]),
+        ("Hydro", colors[11]),
         ("Wind", colors[13]),
         ("Solar", colors[12]),
-        ("Gas", colors[14]),
-        ("Coal", colors[15]),
-        ("Nuclear", colors[8]),
-        ("Hydro", colors[11]),
         ("Battery", colors[9]),
     ]
 

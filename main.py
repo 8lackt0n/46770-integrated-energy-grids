@@ -60,6 +60,7 @@ for result in scenario_results:
     soc_axis_max = result["soc_axis_max"]
     
     plot_capacity_mix(capacities, f"Optimal Installed Capacity Mix for Estonia 2017 ({scenario_label})")
+    plot_annual_energy_mix(dispatch, f"Annual Energy Mix for Estonia 2017 ({scenario_label})")
     
     plot_dispatch(
         january_week,
@@ -80,6 +81,7 @@ for result in scenario_results:
     )
     
     plot_capacity_mix(capacities, f"Optimal Installed Capacity Mix for Estonia 2017 ({scenario_label})")
+    plot_annual_energy_mix(dispatch, f"Annual Energy Mix for Estonia 2017 ({scenario_label})")      
     plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
     
 
@@ -130,6 +132,7 @@ plot_dispatch_with_net_transmission(
 )
 
 plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
+plot_annual_energy_mix(dispatch, f"Annual Energy Mix for Estonia 2017 ({scenario_label})", show=False, save=True)
 plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
 
 
@@ -183,6 +186,7 @@ print("--------------------------------------------------------")
 # f) CO2 limit analysis
 # https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
 base_co2 = 28_000_000
+    
     
 scenario_results = []
     
