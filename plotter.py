@@ -62,27 +62,33 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
 
     values = [df[col].sum() for col, _, _ in components]
     labels = [label for _, label, _ in components]
-    pie_colors = [color for _, _, color in components]
+    bar_colors = [color for _, _, color in components]
     
-    fig, ax = plt.subplots(figsize=(14, 4))
+    fig, ax = plt.subplots(figsize=(12, 5))
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)
-    ax.pie(values, labels=labels, colors=pie_colors, autopct='%1.1f%%')
+    
+    bars = ax.bar(labels, values, color=bar_colors, edgecolor='white', linewidth=0.5)
+    
+    # Add value labels on top of bars
+    for bar, value in zip(bars, values):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height(),
+            f'{value:.0f}',
+            ha='center',
+            va='bottom',
+            fontsize=10,
+            fontweight='bold'
+        )
+    
     ax.text(0.0, 1.07, title, transform=ax.transAxes, fontsize=14, color='black', ha='left', fontweight='bold')
     annual_subtitle = 'Total Wind, Solar, Gas, and Coal Production in MWh'
     if "Battery Storage Discharge" in df.columns:
         annual_subtitle = 'Total Wind, Solar, Gas, Coal, and Battery Discharge in MWh'
 
     ax.text(0.0, 1.01, annual_subtitle, transform=ax.transAxes, fontsize=10, color='black', ha='left')
-    ax.legend(
-        labels,
-        bbox_to_anchor=(1.48, 0.5),
-        loc='center left',
-        frameon=True,
-        facecolor='white',
-        framealpha=1,
-    )
-    fig.subplots_adjust(right=0.58)
+    ax.set_ylabel('Energy Production [MWh]')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     
