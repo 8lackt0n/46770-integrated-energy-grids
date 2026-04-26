@@ -4,6 +4,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import networkx as nx
 
 # def _dispatch_series(df):
 #     colors, _ = color_palette()
@@ -41,6 +42,12 @@ def color_palette():
         "#7D7878",  # Coal
     ]
     return color_palette, background_color
+
+
+def _contrast_text_color(fill_color):
+    r, g, b = matplotlib.colors.to_rgb(fill_color)
+    luminance = 0.299 * r + 0.587 * g + 0.114 * b
+    return "black" if luminance > 0.55 else "white"
 
 def save_plot(file_name):
     os.makedirs("plots", exist_ok=True)
@@ -112,6 +119,171 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
 
     ax.text(0.0, 1.01, annual_subtitle, transform=ax.transAxes, fontsize=10, color='black', ha='left')
     
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+
+def plot_country_balance(dispatch, load, title, show=False, save=True):
+    """
+    Plot a country-level annual energy balance.
+
+    Positive values are generation, imports, and battery discharge.
+    Negative values are load, battery charge, and exports.
+    """
+    colors, background_color = color_palette()
+
+    countries = ["Estonia", "Latvia", "Sweden", "Finland"]
+    load_cols = {"Estonia": "EE", "Finland": "FI", "Sweden": "SE", "Latvia": "LV"}
+
+    generation_components = {
+        "Estonia": ["Wind Generator Estonia", "Solar Generator Estonia", "OCGT Estonia", "Coal Estonia"],
+        "Finland": ["Wind Generator Finland", "Nuclear Finland"],
+        "Sweden": ["Wind Generator Sweden", "Hydro Sweden"],
+        "Latvia": ["Wind Generator Latvia", "Coal Latvia"],
+    }
+
+    battery_discharge_cols = {
+        country: f"Battery Discharge {country}" for country in countries
+    }
+    battery_charge_cols = {
+        country: f"Battery Charge {country}" for country in countries
+    }
+
+    generation = {}
+    battery_discharge = {}
+    battery_charge = {}
+    demand = {}
+    imports = {country: 0.0 for country in countries}
+    exports = {country: 0.0 for country in countries}
+
+    for country in countries:
+        generation[country] = sum(float(dispatch[col].sum()) for col in generation_components[country] if col in dispatch.columns)
+        battery_discharge[country] = float(dispatch[battery_discharge_cols[country]].sum()) if battery_discharge_cols[country] in dispatch.columns else 0.0
+        battery_charge[country] = float(dispatch[battery_charge_cols[country]].sum()) if battery_charge_cols[country] in dispatch.columns else 0.0
+        demand[country] = float(load[load_cols[country]].sum()) if isinstance(load, pd.DataFrame) and load_cols[country] in load.columns else 0.0
+
+    line_pairs = [
+        ("FIN-SWE", "Finland", "Sweden"),
+        ("EST-FIN", "Estonia", "Finland"),
+        ("EST-SWE", "Estonia", "Sweden"),
+        ("EST-LAT", "Estonia", "Latvia"),
+    ]
+
+    for line, left, right in line_pairs:
+        if line not in dispatch.columns:
+            continue
+
+        flow = float(dispatch[line].sum())
+        if flow > 0:
+            exports[left] += flow
+            imports[right] += flow
+        elif flow < 0:
+            exports[right] += -flow
+            imports[left] += -flow
+
+    source_components = [
+        ("Generation", colors[10]),
+        ("Net imports", colors[1]),
+        ("Battery discharge", colors[9]),
+    ]
+    sink_components = [
+        ("Load", colors[15]),
+        ("Battery charge", colors[8]),
+        ("Net exports", colors[3]),
+    ]
+
+    fig, ax = plt.subplots(figsize=(13, 7))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    y = np.arange(len(countries))
+
+    positive_stack = np.zeros(len(countries))
+    negative_stack = np.zeros(len(countries))
+
+    source_values = {
+        "Generation": np.array([generation[c] for c in countries]),
+        "Net imports": np.array([imports[c] for c in countries]),
+        "Battery discharge": np.array([battery_discharge[c] for c in countries]),
+    }
+    sink_values = {
+        "Load": np.array([demand[c] for c in countries]),
+        "Battery charge": np.array([battery_charge[c] for c in countries]),
+        "Net exports": np.array([exports[c] for c in countries]),
+    }
+
+    for label, color in source_components:
+        values = source_values[label]
+        ax.barh(
+            y,
+            values,
+            left=positive_stack,
+            color=color,
+            edgecolor="white",
+            linewidth=0.5,
+            label=label,
+        )
+        positive_stack += values
+
+    for label, color in sink_components:
+        values = sink_values[label]
+        ax.barh(
+            y,
+            -values,
+            left=negative_stack,
+            color=color,
+            edgecolor="white",
+            linewidth=0.5,
+            label=label,
+        )
+        negative_stack -= values
+
+    max_extent = max(np.max(np.abs(positive_stack)), np.max(np.abs(negative_stack)), 1.0)
+
+    ax.axvline(0, color="black", linewidth=1.0)
+    ax.set_yticks(y)
+    ax.set_yticklabels(countries)
+    ax.set_xlabel("Annual energy [MWh]")
+    ax.set_xlim(-1.15 * max_extent, 1.15 * max_extent)
+    ax.invert_yaxis()
+
+    ax.text(
+        0.0, 1.07, title,
+        transform=ax.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold",
+    )
+
+    ax.text(
+        0.0, 1.01,
+        "Positive values are generation, imports, and discharge. Negative values are load, charge, and exports.",
+        transform=ax.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left",
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.12),
+        ncol=3,
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
+
+    fig.subplots_adjust(bottom=0.22)
+
     if save:
         fig_title = title.replace(" ", "_").lower()
         print("Saving:", fig_title)
@@ -589,7 +761,7 @@ def plot_capacity_mix(capacities, title, show=False, save=True):
             ha="center",
             va="center",
             fontsize=9,
-            color="white",
+            color=_contrast_text_color(color),
         )
         bottom += value
 
@@ -748,7 +920,7 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
                     ha="center",
                     va="center",
                     fontsize=8,
-                    color="white",
+                    color=_contrast_text_color(color),
 
                 )
             else:
@@ -767,10 +939,10 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
                     ha="left",
                     va="center",
                     fontsize=8,
-                    color="white",
+                    color=_contrast_text_color(color),
                     arrowprops=dict(
                         arrowstyle="-",
-                        color="white",
+                        color=_contrast_text_color(color),
                         linewidth=0.6,
                         shrinkA=0,
                         shrinkB=0,
@@ -1187,6 +1359,173 @@ def plot_dispatch_with_net_transmission(
     )
 
     fig.subplots_adjust(bottom=0.28)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+
+def plot_transmission_network(dispatch, load, title, show=False, save=True):
+    """
+    Plot a network graph showing transmission flows between countries.
+    Node size = country total generation, edge width/color = net flow magnitude.
+    """
+    colors, background_color = color_palette()
+
+    # Define interconnectors and their line colors
+    interconnectors = [
+        ("FIN-SWE", colors[0]),
+        ("EST-FIN", colors[1]),
+        ("EST-SWE", colors[2]),
+        ("EST-LAT", colors[3]),
+    ]
+
+    # Create directed graph
+    G = nx.DiGraph()
+    countries = ["Estonia", "Finland", "Sweden", "Latvia"]
+    G.add_nodes_from(countries)
+
+    country_map = {
+        "EST": "Estonia",
+        "FIN": "Finland",
+        "SWE": "Sweden",
+        "LAT": "Latvia",
+    }
+
+    flows = {}
+    for line, _ in interconnectors:
+        if line in dispatch.columns:
+            flows[line] = dispatch[line].sum()
+
+    load_totals = {
+        "Estonia": float(load["EE"].sum()) if isinstance(load, pd.DataFrame) and "EE" in load.columns else 0.0,
+        "Finland": float(load["FI"].sum()) if isinstance(load, pd.DataFrame) and "FI" in load.columns else 0.0,
+        "Sweden": float(load["SE"].sum()) if isinstance(load, pd.DataFrame) and "SE" in load.columns else 0.0,
+        "Latvia": float(load["LV"].sum()) if isinstance(load, pd.DataFrame) and "LV" in load.columns else 0.0,
+    }
+
+    edge_labels = {}
+    max_flow = max(abs(f) for f in flows.values()) if flows else 1.0
+
+    for line, _ in interconnectors:
+        if line not in flows:
+            continue
+
+        flow = flows[line]
+        left_abbrev, right_abbrev = line.split("-")
+        left = country_map[left_abbrev]
+        right = country_map[right_abbrev]
+        receiver = right if flow > 0 else left
+        receiver_load = load_totals.get(receiver, 0.0)
+        percent_of_load = (abs(flow) / receiver_load * 100.0) if receiver_load > 0 else 0.0
+
+        if flow > 0:
+            G.add_edge(left, right, flow=flow)
+            edge_labels[(left, right)] = f"{abs(flow):.0f} MWh net exchange\n({percent_of_load:.1f}% of {receiver} annual load)"
+        elif flow < 0:
+            G.add_edge(right, left, flow=-flow)
+            edge_labels[(right, left)] = f"{abs(flow):.0f} MWh net exchange\n({percent_of_load:.1f}% of {receiver} annual load)"
+
+    # Layout and visualization
+    fig, ax = plt.subplots(figsize=(12, 8))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    # Circular layout
+    pos = nx.circular_layout(G, scale=2)
+
+    # Draw nodes
+    node_colors = [colors[13], colors[11], colors[13], colors[15]]
+    nx.draw_networkx_nodes(
+        G, pos,
+        node_color=node_colors,
+        node_size=3000,
+        ax=ax,
+        edgecolors="black",
+        linewidths=2,
+    )
+
+    # Draw node labels
+    nx.draw_networkx_labels(
+        G, pos,
+        font_size=11,
+        font_weight="bold",
+        font_color="white",
+        ax=ax,
+    )
+
+    # Draw edges with width proportional to flow, using explicit arrow patches
+    from matplotlib.patches import FancyArrowPatch
+
+    edge_color_map = {
+        ("Estonia", "Finland"): colors[1],
+        ("Finland", "Estonia"): colors[1],
+        ("Estonia", "Sweden"): colors[2],
+        ("Sweden", "Estonia"): colors[2],
+        ("Estonia", "Latvia"): colors[3],
+        ("Latvia", "Estonia"): colors[3],
+        ("Finland", "Sweden"): colors[0],
+        ("Sweden", "Finland"): colors[0],
+    }
+
+    for (u, v), flow in nx.get_edge_attributes(G, "flow").items():
+        width = max(1.0, 8 * flow / max_flow) if max_flow > 0 else 1.0
+        edge_color = edge_color_map.get((u, v), colors[0])
+        arrow = FancyArrowPatch(
+            posA=pos[u],
+            posB=pos[v],
+            arrowstyle="-|>",
+            mutation_scale=16 + 8 * (flow / max_flow if max_flow > 0 else 1.0),
+            lw=width,
+            color=edge_color,
+            alpha=0.8,
+            shrinkA=30,
+            shrinkB=30,
+            connectionstyle="arc3,rad=0.18",
+        )
+        ax.add_patch(arrow)
+
+    # Draw edge labels (flow values)
+    for (u_country, v_country), label in edge_labels.items():
+        midpoint = (pos[u_country] + pos[v_country]) / 2
+        direction = pos[v_country] - pos[u_country]
+        norm = np.linalg.norm(direction)
+        offset = np.array([0.0, 0.0])
+        if norm > 0:
+            offset = np.array([-direction[1], direction[0]]) / norm * 0.18
+
+        x = midpoint[0] + offset[0]
+        y = midpoint[1] + offset[1]
+        ax.text(
+            x, y, label,
+            fontsize=8,
+            ha="center",
+            va="center",
+            bbox=dict(boxstyle="round,pad=0.25", facecolor="white", alpha=0.85),
+        )
+
+    ax.text(
+        0.0, 1.07, title,
+        transform=ax.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    ax.text(
+        0.0, 1.01,
+        "Annual net corridor exchange between countries (MWh). Percentages are relative to the receiving country's annual load, not traced supply.",
+        transform=ax.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax.axis("off")
 
     if save:
         fig_title = title.replace(" ", "_").lower()
