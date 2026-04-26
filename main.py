@@ -187,7 +187,7 @@ print("--------------------------------------------------------")
 # https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
 base_co2 = 28_000_000
     
-    
+
 scenario_results = []
     
 co2_limits = [base_co2, 0.2 * base_co2, 0.1 * base_co2, 0.05 * base_co2] # in tons of CO2

@@ -120,7 +120,7 @@ class Network():
         efficiency_store = 0.9
         efficiency_dispatch = 0.9
 
-        max_hours = 8  # energy capacity = power * hours
+        max_hours = 12  # energy capacity = power * hours
 
         self.network.add("StorageUnit",
                         "Battery Storage Estonia",

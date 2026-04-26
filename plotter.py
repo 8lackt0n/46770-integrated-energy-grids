@@ -51,10 +51,11 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
     colors, background_color = color_palette()
 
     components = [
-        ("Wind Generator Estonia", "Wind", colors[13]),
-        ("Solar Generator Estonia", "Solar", colors[12]),
         ("OCGT Estonia", "Gas", colors[14]),
         ("Coal Estonia", "Coal", colors[15]),
+        ("Solar Generator Estonia", "Solar", colors[12]),
+        ("Wind Generator Estonia", "Wind", colors[13]),
+
     ]
 
     if "Battery Discharge Estonia" in df.columns:
