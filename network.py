@@ -124,7 +124,7 @@ class Network():
         efficiency_store = 0.9
         efficiency_dispatch = 0.9
 
-        max_hours = 8  # energy capacity = power * hours
+        max_hours = 12  # energy capacity = power * hours
 
         self.network.add("StorageUnit",
                         "Battery Storage Estonia",
@@ -306,6 +306,126 @@ class Network():
             carrier_attribute="co2_emissions",
             sense="<=",
             constant=limit  # total CO2 limit (e.g. in tonnes)
+        )
+
+    def add_h2_network_with_conversion(self):
+
+        countries = ["Estonia", "Latvia", "Sweden", "Finland"]
+
+        # Ensure carrier exists for hydrogen pathway.
+        if "H2" not in self.network.carriers.index:
+            self.network.add("Carrier", "H2", co2_emissions=0.0)
+
+        # Ensure all electricity buses exist.
+        for country in countries:
+            if country not in self.network.buses.index:
+                self.network.add("Bus", country, v_nom=400)
+
+        # Add dedicated H2 buses.
+        for country in countries:
+            h2_bus = f"{country} h2"
+            if h2_bus not in self.network.buses.index:
+                self.network.add(
+                    "Bus",
+                    h2_bus,
+                    carrier="H2",
+                    v_nom=0,
+                )
+
+        # Conversion assumptions (linear links).
+        electrolyzer_efficiency = 0.70   # MWh_H2 / MWh_el
+        h2_turbine_efficiency = 0.50     # MWh_el / MWh_H2
+        pipeline_efficiency = 1.00       # linear/lossless first approximation
+
+        # Cost assumptions (order-of-magnitude placeholders, EUR/MW-year).
+        capital_cost_electrolyzer = annuity(20, 0.07) * 700_000 * (1 + 0.033)
+        capital_cost_h2_turbine = annuity(25, 0.07) * 900_000 * (1 + 0.033)
+        h2_storage_capital_cost = annuity(30, 0.07) * 20_000 * (1 + 0.033)  # EUR/MWh_H2-year
+
+        # Add electricity -> H2 and H2 -> electricity converters in each country.
+        for country in countries:
+            self.network.add(
+                "Link",
+                f"Electrolyzer {country}",
+                bus0=country,
+                bus1=f"{country} h2",
+                carrier="H2",
+                p_nom_extendable=True,
+                efficiency=electrolyzer_efficiency,
+                capital_cost=capital_cost_electrolyzer,
+                marginal_cost=0,
+            )
+
+            self.network.add(
+                "Link",
+                f"H2 Turbine {country}",
+                bus0=f"{country} h2",
+                bus1=country,
+                carrier="H2",
+                p_nom_extendable=True,
+                efficiency=h2_turbine_efficiency,
+                capital_cost=capital_cost_h2_turbine,
+                marginal_cost=0,
+            )
+
+            self.network.add(
+                "Store",
+                f"H2 Storage {country}",
+                bus=f"{country} h2",
+                carrier="H2",
+                e_nom_extendable=True,
+                e_cyclic=True,
+                capital_cost=h2_storage_capital_cost,
+                marginal_cost=0,
+            )
+
+        # Add bidirectional H2 pipelines between countries.
+        self.network.add(
+            "Link",
+            "FIN-SWE H2 Pipeline",
+            bus0="Finland h2",
+            bus1="Sweden h2",
+            carrier="H2",
+            p_nom_extendable=True,
+            p_min_pu=-1,
+            efficiency=pipeline_efficiency,
+            marginal_cost=0,
+        )
+
+        self.network.add(
+            "Link",
+            "EST-FIN H2 Pipeline",
+            bus0="Estonia h2",
+            bus1="Finland h2",
+            carrier="H2",
+            p_nom_extendable=True,
+            p_min_pu=-1,
+            efficiency=pipeline_efficiency,
+            marginal_cost=0,
+        )
+
+        self.network.add(
+            "Link",
+            "EST-SWE H2 Pipeline",
+            bus0="Estonia h2",
+            bus1="Sweden h2",
+            carrier="H2",
+            p_nom_extendable=True,
+            p_min_pu=-1,
+            efficiency=pipeline_efficiency,
+            marginal_cost=0,
+        )
+
+        self.network.add(
+            "Link",
+            "EST-LAT H2 Pipeline",
+            bus0="Estonia h2",
+            bus1="Latvia h2",
+            carrier="H2",
+            p_nom_extendable=True,
+            p_min_pu=-1,
+            efficiency=pipeline_efficiency,
+            marginal_cost=0,
         )
     
     def add_gas_network(self):

@@ -60,6 +60,7 @@ for result in scenario_results:
     soc_axis_max = result["soc_axis_max"]
     
     plot_capacity_mix(capacities, f"Optimal Installed Capacity Mix for Estonia 2017 ({scenario_label})")
+    plot_annual_energy_mix(dispatch, f"Annual Energy Mix for Estonia 2017 ({scenario_label})")
     
     plot_dispatch(
         january_week,
@@ -80,6 +81,7 @@ for result in scenario_results:
     )
     
     plot_capacity_mix(capacities, f"Optimal Installed Capacity Mix for Estonia 2017 ({scenario_label})")
+    plot_annual_energy_mix(dispatch, f"Annual Energy Mix for Estonia 2017 ({scenario_label})")      
     plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
     
 
@@ -130,6 +132,9 @@ plot_dispatch_with_net_transmission(
 )
 
 plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
+plot_annual_energy_mix(dispatch, f"Annual Energy Mix for Estonia 2017 ({scenario_label})", show=False, save=True)
+plot_transmission_network(dispatch, load, f"Transmission Network Flows 2017 ({scenario_label})", show=False, save=True)
+plot_country_balance(dispatch, load, f"Country Energy Balance 2017 ({scenario_label})", show=False, save=True)
 plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
 
 
@@ -169,17 +174,22 @@ imbalance_df = pd.DataFrame({
     "Latvia": imbalance_latvia,
     "Estonia": imbalance_estonia
 }, index=[dispatch.index[0]])
+print("--------------------------------------------------------")
+
 print("Imbalances in each node for the first hour:")
 print(imbalance_df)
 
 # print power flows in each line for the first hour
 print("Power flows in each line for the first hour:")
 print(network.network.lines_t.p0.loc[network.network.snapshots[0]])
+print("--------------------------------------------------------")
+
 
 # f) CO2 limit analysis
 # https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
 base_co2 = 28_000_000
     
+
 scenario_results = []
     
 co2_limits = [base_co2, 0.2 * base_co2, 0.1 * base_co2, 0.05 * base_co2] # in tons of CO2
@@ -222,4 +232,8 @@ network.build_network(storage=True, transmission=True, external=True, gas=True, 
 network.optimize_network()
 
 co2_price = network.network.global_constraints.mu
+print("--------------------------------------------------------")
+print("CO2 Price: ")
 print(co2_price)
+print("--------------------------------------------------------")
+
