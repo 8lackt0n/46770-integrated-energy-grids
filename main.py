@@ -202,7 +202,7 @@ for co2_limit in co2_limits:
             }
         )
 
-plot_capacities_vs_co2_limits(scenario_results, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
+plot_capacities_vs_co2_limits(scenario_results, base_co2, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
 
 # g) Add gas transmission network
 
@@ -217,7 +217,7 @@ dispatch, capacities = network.save_results()
 plot_total_transmission_comparison(dispatch, title="Total Transported Energy in 2017", show=False, save=True)
 
 # h) Add carbon emission constraints
-network.build_network(storage=True, transmission=True, external=True, gas=True, co2_limit=True, limit=28_000_000 * 0.01)
+network.build_network(storage=True, transmission=True, external=True, gas=True, co2_limit=True, limit=28_000_000 * 0.05)
 
 network.optimize_network()
 

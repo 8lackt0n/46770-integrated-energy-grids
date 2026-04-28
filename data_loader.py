@@ -11,6 +11,7 @@ import pycountry
 LOAD_FILE = "data/time_series_60min_singleindex_filtered.csv"
 WIND_FILE = "data/onshore_wind_1979-2017.csv"
 SOLAR_FILE = "data/pv_optimal.csv"
+HEAT_FILE = "data/when2heat_filtered.csv"
 
 
 
@@ -21,7 +22,7 @@ def alpha2_to_alpha3(alpha2="EE"):
     else:
         return None
 
-def load_data(year=2016):
+def load_data(year=2017):
     
     """
     Loads:
@@ -78,7 +79,36 @@ def load_data(year=2016):
 
 
     # ============================
-    # 4) ALIGN INDEXES
+    # 4) LOAD HEAT DEMAND
+    # ============================
+
+    df_heat = pd.read_csv(HEAT_FILE)
+    df_heat["utc_timestamp"] = pd.to_datetime(df_heat["utc_timestamp"])
+    df_heat = df_heat.set_index("utc_timestamp")
+
+    heat_demand = pd.concat(
+        [df_heat[f"{c}_heat_demand_total"][df_heat.index.year == 2015].rename(c) for c in countries],
+        axis=1
+    )
+    
+    # Shift year from 2015 → 2017
+    heat_demand.index = heat_demand.index.map(lambda ts: ts.replace(year=2017))
+    
+    # ============================
+    # 5) LOAD COP
+    # ============================
+
+    cop = pd.concat(
+        [df_heat[f"{c}_COP_ASHP_radiator"][df_heat.index.year == 2015].rename(c) for c in countries],
+        axis=1
+    )
+    
+    # Shift year from 2015 → 2017
+    cop.index = cop.index.map(lambda ts: ts.replace(year=2017))
+    
+    
+    # ============================
+    # 6) ALIGN INDEXES
     # ============================
 
     # Make sure all time series have identical timestamps
@@ -86,12 +116,16 @@ def load_data(year=2016):
 
     wind_cf = wind_cf.reindex(snapshots).fillna(0)
     solar_cf = solar_cf.reindex(snapshots).fillna(0)
+    heat_demand = heat_demand.reindex(snapshots).fillna(0)
+    cop = cop.reindex(snapshots).fillna(0)
 
 
-    return load, wind_cf, solar_cf
+    return load, wind_cf, solar_cf, heat_demand, cop
 
 if __name__ == "__main__":
-    load, wind_cf, solar_cf = load_data()
+    load, wind_cf, solar_cf, heat_demand, cop = load_data()
     print(load)
     print(wind_cf)
     print(solar_cf)
+    print(heat_demand)
+    print(cop)

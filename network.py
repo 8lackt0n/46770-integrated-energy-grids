@@ -7,14 +7,16 @@ from plotter import *
 ### PYPSA NETWORK ###
 class Network():
     
-    def __init__(self, load, wind_cf, solar_cf, hours):
+    def __init__(self, load, wind_cf, solar_cf, heat_demand, cop, hours):
         self.network = pypsa.Network()
         self.load = load
         self.wind_cf = wind_cf
         self.solar_cf = solar_cf
+        self.heat_demand = heat_demand
+        self.cop = cop
         self.hours = hours
     
-    def build_network(self, storage=False, transmission=False, external=False, gas=False, co2_limit=False, limit=None):
+    def build_network(self, storage=False, transmission=False, external=False, gas=False, heat = False, co2_limit=False, limit=None):
 
         # PyPSA requires timezone-naive snapshots.
         snapshots = pd.DatetimeIndex(self.hours)
@@ -106,6 +108,8 @@ class Network():
             self.add_gas_network()
         if co2_limit:
             self.add_co2_limit(limit)
+        if heat:
+            self.add_heat_network()
 
         
         self.network.sanitize()
@@ -424,7 +428,140 @@ class Network():
                         p_min_pu=-1,    # allow both directions
                         efficiency=pipeline_efficiency,
                         marginal_cost = 0)
-          
+        
+    def add_heat_network(self):
+        
+        
+        # Add heat as carrier
+        self.network.add(
+            "Carrier",
+            "Heat",
+        )
+        
+        # Add heat bus for each country
+        for country in ["Estonia", "Latvia", "Sweden", "Finland"]:
+            # Add busses
+            if f"{country} heat" not in self.network.buses.index:
+                self.network.add(
+                    "Bus", 
+                    f"{country} heat",
+                    carrier="Heat",
+                    v_nom=0,
+        )
+        # ADD ESTONIA
+        # Add heat demand
+        
+        self.network.add(
+            "Load",
+            "Estonia Heat Demand",
+            bus = "Estonia heat",
+            p_set=self.heat_demand['EE'].values
+        )
+        self.network.loads_t.p_set
+        
+        # https://arxiv.org/pdf/1906.06936
+        capital_cost = annuity(20,0.07)*1_400_000*(1+0.03) # in €/MW_th
+        
+        
+        
+        # Add heat pump 
+        
+        self.network.add(
+            "Link",
+            "Heat Pump Estonia",
+            bus0="Estonia",
+            bus1="Estonia heat",
+            carrier="Heat",
+            p_nom_extendable=True,
+            efficiency=self.cop['EE'].values,
+            capital_cost = capital_cost
+            )
+        
+        # ADD FINLAND
+        
+        self.network.add(
+            "Load",
+            "Finland Heat Demand",
+            bus = "Finland heat",
+            p_set=self.heat_demand['FI'].values
+        )
+        self.network.loads_t.p_set
+        
+        # Add heat pump 
+        
+        self.network.add(
+            "Link",
+            "Heat Pump Finland",
+            bus0="Finland",
+            bus1="Finland heat",
+            carrier="Heat",
+            p_nom_extendable=True,
+            efficiency=self.cop['FI'].values,
+            capital_cost = capital_cost
+            )
+        
+        # ADD SWEDEN
+        
+        self.network.add(
+            "Load",
+            "Sweden Heat Demand",
+            bus = "Sweden heat",
+            p_set=self.heat_demand['SE'].values
+        )
+        self.network.loads_t.p_set
+        
+        # Add heat pump 
+        
+        self.network.add(
+            "Link",
+            "Heat Pump Sweden",
+            bus0="Sweden",
+            bus1="Sweden heat",
+            carrier="Heat",
+            p_nom_extendable=True,
+            efficiency=self.cop['SE'].values,
+            capital_cost = capital_cost
+            )
+        # # ADD LATVIA
+        
+        self.network.add(
+            "Load",
+            "Latvia Heat Demand",
+            bus = "Latvia heat",
+            p_set=self.heat_demand['LV'].values
+        )
+        
+        self.network.loads_t.p_set
+        
+        # gas_price = 21.6  # €/MWh_th
+        # efficiency_chp = 0.39
+        # marginal_cost = gas_price / efficiency_chp
+        
+        # self.network.add(
+        #     'Link',
+        #     'CHP Latvia',
+        #     bus0='Latvia gas',
+        #     bus1='Latvia',
+        #     bus2='Latvia heat',
+        #     carrier = 'CHP',
+        #     p_nom_extendable = True,
+        #     efficiency = efficiency_chp,
+        #     efficiency2 = efficiency_chp,
+        #     marginal_cost = marginal_cost
+        # )
+        
+        # # Add heat pump
+        self.network.add(
+            "Link",
+            "Heat Pump Latvia",
+            bus0="Latvia",
+            bus1="Latvia heat",
+            carrier="Heat",
+            p_nom_extendable=True,
+            efficiency=self.cop['LV'].values,
+            capital_cost = capital_cost
+            )
+
     def optimize_network(self):
         self.network.optimize(
             solver_name="gurobi",
@@ -523,6 +660,14 @@ class Network():
             
             link_dispatch = -self.network.links_t.p1.copy() 
             dispatch = pd.concat([dispatch, link_dispatch], axis=1)
+            
+            # Heat output from all CHP links
+            chp_links = self.network.links.index[self.network.links.index.str.contains("CHP", case=False)]
+
+            if len(chp_links) > 0:
+                chp_heat = -self.network.links_t.p2[chp_links].copy()
+                chp_heat = chp_heat.rename(columns=lambda x: f"{x} Heat")
+                dispatch = pd.concat([dispatch, chp_heat], axis=1)
         
         if not self.network.storage_units.empty:
             storage_capacities = self.network.storage_units_t.state_of_charge.max().copy()
@@ -554,45 +699,47 @@ if __name__ == "__main__":
     ### LOADING DATA ###
 
     print("Loading data...")
-    load, wind_cf, solar_cf = load_data(year=2017)
+    load, wind_cf, solar_cf, heat_demand, cop = load_data(year=2017)
 
     print(f"Load series length: {len(load)}")
     print(f"Wind CF series length: {len(wind_cf)}")
     print(f"Solar CF series length: {len(solar_cf)}")
-    
+    print(f"Heat Demand series length: {len(heat_demand)}")
+    print(f"COP series length: {len(cop)}")
+
     hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
     
     january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
     january_week = hours[january_week_mask]
     
     ### ANALYSIS ###
-    # f) CO2 limit analysis
-    # https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
-    # base_co2 = 28_000_000
+    # # f) CO2 limit analysis
+    # # https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
+    base_co2 = 28_000_000
     
-    # scenario_results = []
+    scenario_results = []
     
-    # co2_limits = [base_co2, 0.2 * base_co2, 0.1 * base_co2, 0.05 * base_co2, 0] # in tons of CO2
+    co2_limits = [base_co2, 0.2 * base_co2, 0.1 * base_co2, 0.05 * base_co2] # in tons of CO2
     
-    # for co2_limit in co2_limits:
-    #     network = Network(load, wind_cf, solar_cf, hours=hours)
+    for co2_limit in co2_limits:
+        network = Network(load, wind_cf, solar_cf, heat_demand, cop, hours=hours)
         
-    #     network.build_network(storage=True)
+        network.build_network(storage=True)
         
-    #     network.add_co2_limit(co2_limit)
+        network.add_co2_limit(co2_limit)
         
-    #     network.optimize_network()
+        network.optimize_network()
         
-    #     _, capacities = network.save_results()
+        _, capacities = network.save_results()
         
-    #     scenario_results.append(
-    #             {
-    #                 "co2_limit": co2_limit,
-    #                 "capacities": capacities,
-    #             }
-    #         )
+        scenario_results.append(
+                {
+                    "co2_limit": co2_limit,
+                    "capacities": capacities,
+                }
+            )
 
-    # plot_capacities_vs_co2_limits(scenario_results, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
+    plot_capacities_vs_co2_limits(scenario_results, base_co2, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
     
     # g) Gas transmission analysis
     # network = Network(load, wind_cf, solar_cf, hours=hours)
@@ -611,6 +758,13 @@ if __name__ == "__main__":
     # dispatch, capacities = network.save_results()
     # co2_price = network.network.global_constraints.mu
     # print(co2_price)
+    
+    # i) Heat network analysis
+    # network = Network(load, wind_cf, solar_cf, heat_demand, cop, hours=hours)
+    # network.build_network(storage=True, transmission=True, external=True, gas=True, heat=True)
+    # network.optimize_network()
+    # dispatch, capacities = network.save_results()
+    # plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission, Gas and Heat)", show=False, save=True)
     
     
     
