@@ -425,6 +425,12 @@ class Network():
         )
     
     def add_gas_network(self):
+
+
+        cap_fin_swe = 1200.0   # Fenno-Skan 1+2 (500 + 800)
+        cap_est_fin = 1000.0   # Estlink 1+2 (350 + 650)
+        cap_est_swe = 700.0    # Theoretical Estonia-Sweden
+        cap_est_lat = 1400.0*6   # Estonia-Latvia interconnection (using latest estimate)
         
         gas_price = 21.6  # €/MWh_th
 
@@ -507,10 +513,11 @@ class Network():
                         bus0="Finland gas",
                         bus1="Sweden gas",
                         carrier="Gas",
-                        p_nom_extendable=True,
+                        p_nom_extendable=False,
+                        p_nom=cap_fin_swe,
                         p_min_pu=-1,    # allow both directions
                         efficiency=pipeline_efficiency,
-                        marginal_cost = 0)
+                        marginal_cost = 0.00001)
 
         self.network.add(
                         "Link",
@@ -518,10 +525,11 @@ class Network():
                         bus0="Estonia gas",
                         bus1="Finland gas",
                         carrier="Gas",
-                        p_nom_extendable=True,
+                        p_nom_extendable=False,
+                        p_nom = cap_est_fin,
                         p_min_pu=-1,    # allow both directions
                         efficiency=pipeline_efficiency,
-                        marginal_cost = 0)
+                        marginal_cost = 0.00001)
 
         self.network.add(
                         "Link",
@@ -529,10 +537,11 @@ class Network():
                         bus0="Estonia gas",
                         bus1="Sweden gas",
                         carrier="Gas",
-                        p_nom_extendable=True,
+                        p_nom_extendable=False,
+                        p_nom = cap_est_swe,
                         p_min_pu=-1,    # allow both directions
                         efficiency=pipeline_efficiency,
-                        marginal_cost = 0)  
+                        marginal_cost = 0.00001)  
 
         self.network.add(
                         "Link",
@@ -540,10 +549,11 @@ class Network():
                         bus0="Estonia gas",
                         bus1="Latvia gas",
                         carrier="Gas",
-                        p_nom_extendable=True,
+                        p_nom_extendable=False,
+                        p_nom = cap_est_lat,
                         p_min_pu=-1,    # allow both directions
                         efficiency=pipeline_efficiency,
-                        marginal_cost = 0)
+                        marginal_cost = 0.00001)
           
     def optimize_network(self):
         self.network.optimize(

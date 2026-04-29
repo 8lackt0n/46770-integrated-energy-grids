@@ -84,7 +84,12 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
         components.append(("Net Import to Estonia", "Net Imports", colors[10]))
     
 
-    values = [df[col].sum() for col, _, _ in components]
+    values = [df[col].sum() if col in df.columns else 0.0 for col, _, _ in components if col != "Net Import to Estonia"]
+    
+    # Handle net imports specially since it's not a real column
+    if net_import_to_estonia > 0:
+        values.append(net_import_to_estonia)
+    
     labels = [label for _, label, _ in components]
     pie_colors = [color for _, _, color in components]
 
