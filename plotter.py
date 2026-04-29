@@ -84,7 +84,12 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
         components.append(("Net Import to Estonia", "Net Imports", colors[10]))
     
 
-    values = [df[col].sum() for col, _, _ in components]
+    values = [df[col].sum() if col in df.columns else 0.0 for col, _, _ in components if col != "Net Import to Estonia"]
+    
+    # Handle net imports specially since it's not a real column
+    if net_import_to_estonia > 0:
+        values.append(net_import_to_estonia)
+    
     labels = [label for _, label, _ in components]
     pie_colors = [color for _, _, color in components]
 
@@ -836,6 +841,7 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
         ("Nuclear", colors[8]),
         ("Coal", colors[15]),
         ("Gas", colors[14]),
+        ("H2", colors[10]),
         ("Hydro", colors[11]),
         ("Wind", colors[13]),
         ("Solar", colors[12]),
@@ -880,6 +886,8 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
         # Classify technology
         if "Battery Storage" in asset_name:
             df_plot.loc[country, "Battery"] += p_nom
+        elif "Electrolyzer" in asset_name or "H2 Turbine" in asset_name or "H2 Storage" in asset_name:
+            df_plot.loc[country, "H2"] += p_nom
         elif "Wind" in asset_name:
             df_plot.loc[country, "Wind"] += p_nom
         elif "Solar" in asset_name:
