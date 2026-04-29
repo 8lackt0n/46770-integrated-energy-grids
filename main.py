@@ -397,10 +397,11 @@ if RUN_H:
     print(co2_price)
     print("--------------------------------------------------------")
 
-# i) Add heat sector
 if RUN_I:
+    
+    # i) Add heat sector
     network = Network(load,wind_cf, solar_cf,hours=hours, heat_demand=heat_demand, cop=cop)
-    network.build_network(storage=True, transmission=True, external=True, gas=True, heat=True)
+    network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=28_000_000 * 0.2, heat=True)
     network.optimize_network()
     dispatch, capacities = network.save_results()
     plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission, H2, and Heat)", show=False, save=True)

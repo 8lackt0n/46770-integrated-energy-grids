@@ -842,6 +842,8 @@ class Network():
             capital_cost = capital_cost_heat_pump
             )
 
+        marginal_cost = 0.00001
+          
     def optimize_network(self):
         self.network.optimize(
             solver_name="gurobi",
