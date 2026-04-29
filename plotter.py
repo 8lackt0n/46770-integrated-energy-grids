@@ -655,7 +655,7 @@ def plot_h2_storage_operation(time_index, df, title, show=False, save=True):
     if show:
         plt.show()
 
-def plot_capacities_vs_co2_limits(scenario_results, title, show=False, save=True):
+def plot_capacities_vs_co2_limits(scenario_results, base_co2, title, show=False, save=True):
     
 
     colors, background_color = color_palette()
@@ -692,7 +692,8 @@ def plot_capacities_vs_co2_limits(scenario_results, title, show=False, save=True
     df_plot = pd.DataFrame(rows)
 
     df_plot = df_plot.sort_values("co2_limit", ascending=False).reset_index(drop=True)
-    df_plot["co2_label"] = [f"{x/1000:.0f}" for x in df_plot["co2_limit"]]
+    df_plot["co2_label"] = [f"{(1 - x / base_co2) * 100:.0f}% reduction" for x in df_plot["co2_limit"]
+]
 
     labels = [label for _, label, _ in components]
     stack_colors = [color for _, _, color in components]
@@ -705,7 +706,8 @@ def plot_capacities_vs_co2_limits(scenario_results, title, show=False, save=True
 
     for label, color in zip(labels, stack_colors):
         values = df_plot[label].values
-        ax.bar(
+        
+        bars = ax.bar(
             df_plot["co2_label"],
             values,
             bottom=bottom,
@@ -714,6 +716,20 @@ def plot_capacities_vs_co2_limits(scenario_results, title, show=False, save=True
             edgecolor="white",
             linewidth=0.5
         )
+
+        # Add labels inside each segment
+        for i, (bar, value) in enumerate(zip(bars, values)):
+            if value > 0:  # avoid cluttering with zeros
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    bottom[i] + value / 2,   # center vertically in segment
+                    f"{value:.0f}",         # format as integer
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color="black"
+                )
+
         bottom += values
 
     ax.text(
@@ -727,14 +743,14 @@ def plot_capacities_vs_co2_limits(scenario_results, title, show=False, save=True
 
     ax.text(
         0.0, 1.01,
-        "Installed capacity by technology for each CO2 limit in MW",
+        "Installed capacity by technology for each CO2 reduction target in MW",
         transform=ax.transAxes,
         fontsize=10,
         color="black",
         ha="left"
     )
 
-    ax.set_xlabel("CO2 limit [ktCO2]")
+    ax.set_xlabel("CO2 Reduction Compared to Base Scenario")
     ax.set_ylabel("Installed capacity [MW]")
 
     ax.spines["top"].set_visible(False)
@@ -946,6 +962,8 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
         ("Battery", colors[9]),
         ("H2 Electrolyzer", "#A7E3FF"),
         ("H2 Turbine", "#6EC6FF"),
+        ("Heat Pump", colors[5]),
+        ("CHP", colors[1])
     ]
 
     # If duplicate asset names exist, combine them
@@ -978,28 +996,33 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
             continue
 
         # Use power capacity for the generic country mix. H2 storage is shown separately.
-        value = row["p_nom_opt"] if "p_nom_opt" in capacities.columns and pd.notna(row["p_nom_opt"]) else 0.0
+        p_nom = row["p_nom_opt"] if "p_nom_opt" in capacities.columns and pd.notna(row["p_nom_opt"]) else 0.0
+        s_nom = row["s_nom_opt"] if "s_nom_opt" in capacities.columns and pd.notna(row["s_nom_opt"]) else 0.0
 
         # Classify technology
         if "Battery Storage" in asset_name:
-            df_plot.loc[country, "Battery"] += value
+            df_plot.loc[country, "Battery"] += p_nom
         elif "Electrolyzer" in asset_name:
-            df_plot.loc[country, "H2 Electrolyzer"] += value
+            df_plot.loc[country, "H2 Electrolyzer"] += p_nom
         elif "H2 Turbine" in asset_name:
-            df_plot.loc[country, "H2 Turbine"] += value
+            df_plot.loc[country, "H2 Turbine"] += p_nom
         elif "Wind" in asset_name:
-            df_plot.loc[country, "Wind"] += value
+            df_plot.loc[country, "Wind"] += p_nom
         elif "Solar" in asset_name:
-            df_plot.loc[country, "Solar"] += value
-        elif "OCGT" in asset_name or "Gas" in asset_name:
-            df_plot.loc[country, "Gas"] += value
+            df_plot.loc[country, "Solar"] += p_nom
+        elif "OCGT" in asset_name:
+            df_plot.loc[country, "Gas"] += p_nom
         elif "Coal" in asset_name:
-            df_plot.loc[country, "Coal"] += value
+            df_plot.loc[country, "Coal"] += p_nom
         elif "Nuclear" in asset_name:
-            df_plot.loc[country, "Nuclear"] += value
+            df_plot.loc[country, "Nuclear"] += p_nom
         elif "Hydro" in asset_name:
-            df_plot.loc[country, "Hydro"] += value
-
+            df_plot.loc[country, "Hydro"] += p_nom
+        elif "Heat Pump" in asset_name:
+            df_plot.loc[country, "Heat Pump"] += p_nom
+        elif "CHP" in asset_name:
+            df_plot.loc[country, "CHP"] += p_nom
+        
     fig, ax = plt.subplots(figsize=(12, 6))
     fig.patch.set_facecolor(background_color)
     ax.set_facecolor(background_color)

@@ -10,16 +10,19 @@ RUN_D = False # + transmission
 RUN_E = False # imbalances
 RUN_F = False # CO2 limit analysis
 RUN_G = False # H2 network
-RUN_H = True # CO2 constraint
+RUN_H = False # CO2 constraint
+RUN_I = True # heat sector
 
 ### LOADING DATA ###
 
 print("Loading data...")
-load, wind_cf, solar_cf = load_data(year=2017)
+load, wind_cf, solar_cf, heat_demand, cop = load_data(year=2017)
 
 print(f"Load series length: {len(load)}")
 print(f"Wind CF series length: {len(wind_cf)}")
 print(f"Solar CF series length: {len(solar_cf)}")
+print(f"Heat Demand series length: {len(heat_demand)}")
+print(f"COP series length: {len(cop)}")
 hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
 
 january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
@@ -242,8 +245,7 @@ if RUN_F:
                 }
             )
 
-    plot_capacities_vs_co2_limits(scenario_results, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
-
+    plot_capacities_vs_co2_limits(scenario_results, base_co2, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
 if RUN_G:
     # g) Add H2 transmission network
 
@@ -394,3 +396,11 @@ if RUN_H:
     print("CO2 Price: ")
     print(co2_price)
     print("--------------------------------------------------------")
+
+# i) Add heat sector
+if RUN_I:
+    network = Network(load,wind_cf, solar_cf,hours=hours, heat_demand=heat_demand, cop=cop)
+    network.build_network(storage=True, transmission=True, external=True, gas=True, heat=True)
+    network.optimize_network()
+    dispatch, capacities = network.save_results()
+    plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission, H2, and Heat)", show=False, save=True)
