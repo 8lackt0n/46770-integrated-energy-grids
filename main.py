@@ -7,11 +7,13 @@ from helper import *
 ### LOADING DATA ###
 
 print("Loading data...")
-load, wind_cf, solar_cf = load_data(year=2017)
+load, wind_cf, solar_cf, heat_demand, cop = load_data(year=2017)
 
 print(f"Load series length: {len(load)}")
 print(f"Wind CF series length: {len(wind_cf)}")
 print(f"Solar CF series length: {len(solar_cf)}")
+print(f"Heat Demand series length: {len(heat_demand)}")
+print(f"COP series length: {len(cop)}")
 hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
 
 january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')
@@ -225,9 +227,10 @@ network.optimize_network()
 dispatch, capacities = network.save_results()
 
 plot_total_transmission_comparison(dispatch, title="Total Transported Energy in 2017", show=False, save=True)
+plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission, and Gas)", show=False, save=True)
 
 # h) Add carbon emission constraints
-network.build_network(storage=True, transmission=True, external=True, gas=True, co2_limit=True, limit=28_000_000 * 0.05)
+network.build_network(storage=True, transmission=True, external=True, gas=True, co2_limit=True, limit=28_000_000 * 0.5)
 
 network.optimize_network()
 
@@ -237,3 +240,9 @@ print("CO2 Price: ")
 print(co2_price)
 print("--------------------------------------------------------")
 
+# i) Add heat sector
+network = Network(load,wind_cf, solar_cf,hours=hours, heat_demand=heat_demand, cop=cop)
+network.build_network(storage=True, transmission=True, external=True, gas=True, heat=True)
+network.optimize_network()
+dispatch, capacities = network.save_results()
+plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission, Gas, and Heat)", show=False, save=True)
