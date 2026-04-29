@@ -825,6 +825,7 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
         ("Nuclear", colors[8]),
         ("Coal", colors[15]),
         ("Gas", colors[14]),
+        ("H2", colors[10]),
         ("Hydro", colors[11]),
         ("Wind", colors[13]),
         ("Solar", colors[12]),
@@ -867,6 +868,8 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
         # Classify technology
         if "Battery Storage" in asset_name:
             df_plot.loc[country, "Battery"] += p_nom
+        elif "Electrolyzer" in asset_name or "H2 Turbine" in asset_name or "H2 Storage" in asset_name:
+            df_plot.loc[country, "H2"] += p_nom
         elif "Wind" in asset_name:
             df_plot.loc[country, "Wind"] += p_nom
         elif "Solar" in asset_name:

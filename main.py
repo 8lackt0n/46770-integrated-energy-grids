@@ -5,12 +5,12 @@ from network import Network
 from helper import *
 
 ### SECTION CONTROLS ###
-RUN_A_C = False # with and without storage single node 
+RUN_A_C = True # with and without storage single node 
 RUN_D = True # + transmission 
-RUN_E = False # imbalances
-RUN_F = False # CO2 limit analysis
-RUN_G = False # + gas network
-RUN_H = False # CO2 constraint
+RUN_E = True # imbalances
+RUN_F = True # CO2 limit analysis
+RUN_G = True # H2 network
+RUN_H = True # CO2 constraint
 
 ### LOADING DATA ###
 
@@ -228,11 +228,11 @@ if RUN_F:
     plot_capacities_vs_co2_limits(scenario_results, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
 
 if RUN_G:
-    # g) Add gas transmission network
+    # g) Add H2 transmission network
 
     network = Network(load,wind_cf, solar_cf, hours=hours)
 
-    network.build_network(storage=True, transmission=True, external=True, gas=True)
+    network.build_network(storage=True, transmission=True, external=True, h2=True)
 
     network.optimize_network()
 
@@ -240,7 +240,7 @@ if RUN_G:
 
     soc_max = capacities.get('Battery Storage Estonia', 0)
 
-    scenario_label = "with storage, transmission, and gas network"
+    scenario_label = "with storage, transmission, and H2 network"
 
     shared_power_axis_max = compute_shared_power_axis_max(dispatch, load_est)
 
@@ -263,60 +263,52 @@ if RUN_G:
         soc_axis_max=soc_max,
     )
 
-    plot_capacity_mix_by_country_gas(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
-    plot_annual_energy_mix_gas(dispatch, f"Annual Energy Mix for Estonia 2017 ({scenario_label})", show=False, save=True)
     plot_transmission_network(dispatch, load, f"Transmission Network Flows 2017 ({scenario_label})", show=False, save=True)
     plot_country_balance(dispatch, load, f"Country Energy Balance 2017 ({scenario_label})", show=False, save=True)
     plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
 
-    plot_storage_operation(
-        january_week,
-        dispatch[january_week_mask],
-        f"Battery Storage Operation for One Week in January 2017 ({scenario_label})",
-    )
-    plot_storage_operation(
-        july_week,
-        dispatch[july_week_mask],
-        f"Battery Storage Operation for One Week in July 2017 ({scenario_label})",
+    plot_capacity_mix_by_country(
+        capacities,
+        f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})",
+        show=False,
+        save=True,
     )
 
     plot_total_transmission_comparison(dispatch, title="Total Transported Energy in 2017", show=False, save=True)
-    plot_gas_pipeline_flows(dispatch, title="Gas Pipeline Flows in 2017", show=False, save=True)
 
-    gas_columns = [
-        "FIN-SWE Gas Pipeline",
-        "EST-FIN Gas Pipeline",
-        "EST-SWE Gas Pipeline",
-        "EST-LAT Gas Pipeline",
-    ]
-    electric_columns = [
-        "FIN-SWE",
-        "EST-FIN",
-        "EST-SWE",
-        "EST-LAT",
-    ]
-
-    gas_pipeline_efficiency = 1.0
-    gas_to_power_efficiency = 0.39
-
-    gas_total = dispatch[[col for col in gas_columns if col in dispatch.columns]].abs().sum().sum() / 1000
-    electric_total = dispatch[[col for col in electric_columns if col in dispatch.columns]].abs().sum().sum() / 1000
-    gas_equivalent_electricity = gas_total * gas_pipeline_efficiency * gas_to_power_efficiency
+    h2_pipeline_capacities = network.network.links.loc[
+        network.network.links.index.str.contains("H2 Pipeline"),
+        "p_nom_opt",
+    ].sum()
 
     print("--------------------------------------------------------")
-    if 'electric_total_d' in globals():
-        print(f"Total electricity transported in case d: {electric_total_d:.1f} GWh_el")
-    print(f"Total gas transported: {gas_total:.1f} GWh_th")
-    print(f"Gas transported as electricity-equivalent output: {gas_equivalent_electricity:.1f} GWh_el")
-    print(f"Total electricity transported: {electric_total:.1f} GWh_el")
-    print(f"Raw gas-to-electricity transport ratio: {gas_total / electric_total:.2f}")
+    print(f"Total H2 pipeline capacity installed: {h2_pipeline_capacities:.1f} MW")
     print("--------------------------------------------------------")
+
 
 if RUN_H:
     # h) Add carbon emission constraints
-    network.build_network(storage=True, transmission=True, external=True, gas=True, co2_limit=True, limit=28_000_000 * 0.1)
+
+    network = Network(load,wind_cf, solar_cf, hours=hours)
+    network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=28_000_000 * 0.2)
 
     network.optimize_network()
+
+    dispatch, capacities = network.save_results()
+
+    scenario_label = "with storage, transmission, H2, and CO2 constraint"
+
+    plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
+    
+    h2_pipeline_capacities = network.network.links.loc[
+    network.network.links.index.str.contains("H2 Pipeline"),
+    "p_nom_opt",
+        ].sum()
+
+    print("--------------------------------------------------------")
+    print(f"Total H2 pipeline capacity installed: {h2_pipeline_capacities:.1f} MW")
+    print("--------------------------------------------------------")
+
 
     co2_price = network.network.global_constraints.mu
     print("--------------------------------------------------------")

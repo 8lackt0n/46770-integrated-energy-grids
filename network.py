@@ -14,7 +14,7 @@ class Network():
         self.solar_cf = solar_cf
         self.hours = hours
     
-    def build_network(self, storage=False, transmission=False, external=False, gas=False, co2_limit=False, limit=None):
+    def build_network(self, storage=False, transmission=False, external=False, gas=False, h2=False, co2_limit=False, limit=None):
 
         # PyPSA requires timezone-naive snapshots.
         snapshots = pd.DatetimeIndex(self.hours)
@@ -104,6 +104,8 @@ class Network():
             self.add_external()
         if gas:
             self.add_gas_network()
+        if h2:
+            self.add_h2_network_with_conversion()
         if co2_limit:
             self.add_co2_limit(limit)
 
@@ -121,11 +123,13 @@ class Network():
         efficiency_dispatch = 0.9
 
         max_hours = 12  # energy capacity = power * hours
+        battery_p_nom_max = self.load["EE"].mean() # 2x average load in MW
 
         self.network.add("StorageUnit",
                         "Battery Storage Estonia",
                         bus="Estonia",
                         p_nom_extendable=True,
+                        p_nom_max=battery_p_nom_max,
                         capital_cost=capital_cost,
                         marginal_cost=marginal_cost,
                         efficiency_store=efficiency_store,
@@ -241,6 +245,21 @@ class Network():
                     capital_cost = capital_cost_wind,
                     p_max_pu=self.wind_cf['FI'].values)
         
+                # OCGT Power Plant
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_OCGT = annuity(25,0.07)*560_000*(1+0.033) # in €/MW
+        fuel_cost = 21.6 # in €/MWh_th
+        efficiency_gas = 0.39 # MWh_elec/MWh_th
+        marginal_cost_OCGT = fuel_cost/efficiency_gas # in €/MWh_el
+        self.network.add("Generator",
+                    "OCGT Finland",
+                    bus="Finland",
+                    p_nom_extendable=True,
+                    carrier="Gas",
+                    efficiency=efficiency_gas,
+                    capital_cost = capital_cost_OCGT,
+                    marginal_cost = marginal_cost_OCGT)
+        
         
         
         # https://www.sciencedirect.com/science/article/pii/S0378775312014759?via%3Dihub
@@ -253,7 +272,8 @@ class Network():
             carrier="Hydro",
             p_nom_extendable=True,
             capital_cost=capital_cost_hydro,
-            marginal_cost=marginal_cost_hydro
+            marginal_cost=marginal_cost_hydro,
+            p_nom_max = 16000
         )
         
         # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
@@ -265,6 +285,21 @@ class Network():
                     carrier="Wind", 
                     capital_cost = capital_cost_wind,
                     p_max_pu=self.wind_cf['SE'].values)
+        
+        # OCGT Power Plant
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_OCGT = annuity(25,0.07)*560_000*(1+0.033) # in €/MW
+        fuel_cost = 21.6 # in €/MWh_th
+        efficiency_gas = 0.39 # MWh_elec/MWh_th
+        marginal_cost_OCGT = fuel_cost/efficiency_gas # in €/MWh_el
+        self.network.add("Generator",
+                    "OCGT Sweden",
+                    bus="Sweden",
+                    p_nom_extendable=True,
+                    carrier="Gas",
+                    efficiency=efficiency_gas,
+                    capital_cost = capital_cost_OCGT,
+                    marginal_cost = marginal_cost_OCGT)
         
         
         # Ignite Fired Power Plant
@@ -293,6 +328,21 @@ class Network():
                     carrier="Wind", 
                     capital_cost = capital_cost_wind,
                     p_max_pu=self.wind_cf['LV'].values)
+        
+                # OCGT Power Plant
+        # https://www.sciencedirect.com/science/article/pii/S0196890419309835?via%3Dihub
+        capital_cost_OCGT = annuity(25,0.07)*560_000*(1+0.033) # in €/MW
+        fuel_cost = 21.6 # in €/MWh_th
+        efficiency_gas = 0.39 # MWh_elec/MWh_th
+        marginal_cost_OCGT = fuel_cost/efficiency_gas # in €/MWh_el
+        self.network.add("Generator",
+                    "OCGT Latvia",
+                    bus="Latvia",
+                    p_nom_extendable=True,
+                    carrier="Gas",
+                    efficiency=efficiency_gas,
+                    capital_cost = capital_cost_OCGT,
+                    marginal_cost = marginal_cost_OCGT)
     
     def add_co2_limit(self, limit):
         self.network.add(
@@ -329,14 +379,35 @@ class Network():
                 )
 
         # Conversion assumptions (linear links).
-        electrolyzer_efficiency = 0.70   # MWh_H2 / MWh_el
-        h2_turbine_efficiency = 0.50     # MWh_el / MWh_H2
+        electrolyzer_efficiency = 0.80   # MWh_H2 / MWh_el
+        h2_turbine_efficiency = 0.58     # MWh_el / MWh_H2
         pipeline_efficiency = 1.00       # linear/lossless first approximation
 
         # Cost assumptions (order-of-magnitude placeholders, EUR/MW-year).
-        capital_cost_electrolyzer = annuity(20, 0.07) * 700_000 * (1 + 0.033)
-        capital_cost_h2_turbine = annuity(25, 0.07) * 900_000 * (1 + 0.033)
-        h2_storage_capital_cost = annuity(30, 0.07) * 20_000 * (1 + 0.033)  # EUR/MWh_H2-year
+        # --- Hydrogen system CAPEX assumptions (2017-based, EU-consistent) ---
+
+        # Sources:
+        # IEA (2019) - The Future of Hydrogen:
+        # https://www.iea.org/reports/the-future-of-hydrogen
+        #
+        # World Bank (2020) - Green Hydrogen:
+        # https://documents.worldbank.org/en/publication/documents-reports/documentdetail/green-hydrogen-in-developing-countries
+        #
+        # Joule (2019) - Hydrogen storage cost assumption (~1000 USD/kg H2):
+        # https://www.sciencedirect.com/science/article/pii/S2542435119303228
+        #
+        # IRENA (2020) - Green Hydrogen:
+        # https://www.irena.org/publications/2020/Sep/Green-hydrogen
+
+        capital_cost_electrolyzer = annuity(20, 0.07) * 600_000 * (1 + 0.033)   # €/MW-year
+
+        capital_cost_h2_turbine = annuity(25, 0.07) * 700_000 * (1 + 0.033)     # €/MW-year
+        # (hydrogen gas turbine, based on 500–900 USD/kW range)
+
+        h2_storage_capital_cost = annuity(30, 0.07) * 25_000 * (1 + 0.033)      # €/MWh_H2-year
+        # (~1000 USD/kg H2 ≈ 25,000 €/MWh)
+        
+        capital_cost_h2_pipeline = 1 #annuity(40, 0.07) * 100_000 * (1 + 0.033)
 
         # Add electricity -> H2 and H2 -> electricity converters in each country.
         for country in countries:
@@ -370,7 +441,7 @@ class Network():
                 bus=f"{country} h2",
                 carrier="H2",
                 e_nom_extendable=True,
-                e_cyclic=True,
+                e_cyclic=False,
                 capital_cost=h2_storage_capital_cost,
                 marginal_cost=0,
             )
@@ -385,7 +456,8 @@ class Network():
             p_nom_extendable=True,
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
-            marginal_cost=0,
+            capital_cost=capital_cost_h2_pipeline,
+            marginal_cost=0.0001,
         )
 
         self.network.add(
@@ -397,7 +469,8 @@ class Network():
             p_nom_extendable=True,
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
-            marginal_cost=0,
+            capital_cost=capital_cost_h2_pipeline,
+            marginal_cost=0.0001,
         )
 
         self.network.add(
@@ -409,7 +482,8 @@ class Network():
             p_nom_extendable=True,
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
-            marginal_cost=0,
+            capital_cost=capital_cost_h2_pipeline,
+            marginal_cost=0.0001,
         )
 
         self.network.add(
@@ -421,7 +495,8 @@ class Network():
             p_nom_extendable=True,
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
-            marginal_cost=0,
+            capital_cost=capital_cost_h2_pipeline,
+            marginal_cost=0.0001,
         )
     
     def add_gas_network(self):
@@ -655,8 +730,7 @@ class Network():
             dispatch = pd.concat([dispatch, link_dispatch], axis=1)
         
         if not self.network.storage_units.empty:
-            storage_capacities = self.network.storage_units_t.state_of_charge.max().copy()
-            storage_capacities = storage_capacities.rename("p_nom_opt")
+            storage_capacities = self.network.storage_units.p_nom_opt.copy()
             capacacities = pd.concat([capacacities, storage_capacities], ignore_index=False)
 
             charge = self.network.storage_units_t.p_store.copy()
@@ -689,6 +763,8 @@ if __name__ == "__main__":
     print(f"Load series length: {len(load)}")
     print(f"Wind CF series length: {len(wind_cf)}")
     print(f"Solar CF series length: {len(solar_cf)}")
+
+    print(4 * load["EE"].mean())
     
     hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
     
