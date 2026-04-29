@@ -5,12 +5,13 @@ from network import Network
 from helper import *
 
 ### SECTION CONTROLS ###
-RUN_A_C = True # with and without storage single node 
-RUN_D = True # + transmission 
-RUN_E = True # imbalances
-RUN_F = True # CO2 limit analysis
-RUN_G = True # H2 network
-RUN_H = True # CO2 constraint
+RUN_A_C = False # with and without storage single node 
+RUN_D = False # + transmission 
+RUN_E = False # imbalances
+RUN_F = False # CO2 limit analysis
+RUN_G = False # H2 network
+RUN_H = False # CO2 constraint
+RUN_I = True # heat sector
 
 ### LOADING DATA ###
 
@@ -227,9 +228,7 @@ if RUN_F:
                 }
             )
 
-plot_capacities_vs_co2_limits(scenario_results, base_co2, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
-    plot_capacities_vs_co2_limits(scenario_results, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
-
+    plot_capacities_vs_co2_limits(scenario_results, base_co2, f"Installed Capacities under Different CO2 Emission Limits Estonia, 2017", show=False, save=True)
 if RUN_G:
     # g) Add H2 transmission network
 
@@ -319,9 +318,11 @@ if RUN_H:
     print(co2_price)
     print("--------------------------------------------------------")
 
-# i) Add heat sector
-network = Network(load,wind_cf, solar_cf,hours=hours, heat_demand=heat_demand, cop=cop)
-network.build_network(storage=True, transmission=True, external=True, gas=True, heat=True)
-network.optimize_network()
-dispatch, capacities = network.save_results()
-plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission, Gas, and Heat)", show=False, save=True)
+if RUN_I:
+    
+    # i) Add heat sector
+    network = Network(load,wind_cf, solar_cf,hours=hours, heat_demand=heat_demand, cop=cop)
+    network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=28_000_000 * 0.2, heat=True)
+    network.optimize_network()
+    dispatch, capacities = network.save_results()
+    plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission, H2, and Heat)", show=False, save=True)

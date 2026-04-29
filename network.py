@@ -15,11 +15,9 @@ class Network():
         self.heat_demand = heat_demand
         self.cop = cop
         self.hours = hours
-    
-    def build_network(self, storage=False, transmission=False, external=False, gas=False, heat = False, co2_limit=False, limit=None):
-=======
-    def build_network(self, storage=False, transmission=False, external=False, gas=False, h2=False, co2_limit=False, limit=None):
->>>>>>> 24cdf5bc46ff2d3e352f2e065176e7239b78723f
+
+    def build_network(self, storage=False, transmission=False, external=False, gas=False, h2=False, co2_limit=False, limit=None, heat=False):
+
 
         # PyPSA requires timezone-naive snapshots.
         snapshots = pd.DatetimeIndex(self.hours)
@@ -635,7 +633,6 @@ class Network():
                         p_nom = cap_est_lat,
                         p_min_pu=-1,    # allow both directions
                         efficiency=pipeline_efficiency,
-<<<<<<< HEAD
                         marginal_cost = 0)
         
     def add_heat_network(self):
@@ -826,10 +823,8 @@ class Network():
             capital_cost = capital_cost_heat_pump
             )
 
-=======
-                        marginal_cost = 0.00001)
+        marginal_cost = 0.00001
           
->>>>>>> 24cdf5bc46ff2d3e352f2e065176e7239b78723f
     def optimize_network(self):
         self.network.optimize(
             solver_name="gurobi",
@@ -971,15 +966,12 @@ if __name__ == "__main__":
     print(f"Load series length: {len(load)}")
     print(f"Wind CF series length: {len(wind_cf)}")
     print(f"Solar CF series length: {len(solar_cf)}")
-<<<<<<< HEAD
     print(f"Heat Demand series length: {len(heat_demand)}")
     print(f"COP series length: {len(cop)}")
 
-=======
 
     print(4 * load["EE"].mean())
     
->>>>>>> 24cdf5bc46ff2d3e352f2e065176e7239b78723f
     hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
     
     january_week_mask = (hours >= '2017-01-01') & (hours < '2017-01-08')

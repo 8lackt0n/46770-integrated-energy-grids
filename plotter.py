@@ -657,10 +657,10 @@ def plot_total_transmission_comparison(transmission_df, title, show=False, save=
     colors, background_color = color_palette()
 
     gas_columns = [
-        "FIN-SWE Gas Pipeline",
-        "EST-FIN Gas Pipeline",
-        "EST-SWE Gas Pipeline",
-        "EST-LAT Gas Pipeline",
+        "FIN-SWE H2 Pipeline",
+        "EST-FIN H2 Pipeline",
+        "EST-SWE H2 Pipeline",
+        "EST-LAT H2 Pipeline",
     ]
 
     electrical_columns = [
