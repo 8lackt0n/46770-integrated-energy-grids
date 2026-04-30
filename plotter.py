@@ -867,6 +867,10 @@ def plot_capacity_mix(capacities, title, show=False, save=True):
         ("Solar Generator Estonia", "Solar", colors[12]),
     ]
 
+    # Include battery capacity in the Estonia mix if present in the capacities index
+    if any("Battery Storage" in idx for idx in capacities.index):
+        components.append(("Battery Storage Estonia", "Battery", colors[9]))
+
     values = [capacities.loc[col] if col in capacities.index else 0.0 for col, _, _ in components]
     labels = [label for _, label, _ in components]
     stack_colors = [color for _, _, color in components]

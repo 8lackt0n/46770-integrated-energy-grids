@@ -5,9 +5,9 @@ from network import Network
 from helper import *
 
 ### SECTION CONTROLS ###
-RUN_A_C = False # with and without storage single node 
-RUN_D = True # + transmission 
-RUN_E = True # imbalances
+RUN_A_C = True # with and without storage single node 
+RUN_D = False # + transmission 
+RUN_E = False # imbalances
 RUN_F = False # CO2 limit analysis
 RUN_G = False # H2 network
 RUN_H = False # CO2 constraint
