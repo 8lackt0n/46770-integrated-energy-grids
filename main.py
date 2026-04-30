@@ -6,12 +6,12 @@ from helper import *
 
 ### SECTION CONTROLS ###
 RUN_A_C = False # with and without storage single node 
-RUN_D = False # + transmission 
-RUN_E = False # imbalances
+RUN_D = True # + transmission 
+RUN_E = True # imbalances
 RUN_F = False # CO2 limit analysis
 RUN_G = False # H2 network
 RUN_H = False # CO2 constraint
-RUN_I = True # heat sector
+RUN_I = False # heat sector
 
 ### LOADING DATA ###
 
@@ -189,13 +189,13 @@ if RUN_E:
 
     # calculate imbalances in each node for the first hour
     # Finland
-    generation_finland = dispatch['Wind Generator Finland'].iloc[0] + dispatch['Nuclear Finland'].iloc[0]
+    generation_finland = dispatch['Wind Generator Finland'].iloc[0] + dispatch['Nuclear Finland'].iloc[0]+dispatch['OCGT Finland'].iloc[0]
     imbalance_finland = generation_finland - load['FI'].iloc[0]
     # Sweden (SE2)
-    generation_sweden = dispatch['Wind Generator Sweden'].iloc[0] + dispatch['Hydro Sweden'].iloc[0]
+    generation_sweden = dispatch['Wind Generator Sweden'].iloc[0] + dispatch['Hydro Sweden'].iloc[0]+dispatch['OCGT Sweden'].iloc[0]
     imbalance_sweden = generation_sweden - load['SE'].iloc[0]
     # Latvia
-    generation_latvia = dispatch['Wind Generator Latvia'].iloc[0] + dispatch['Coal Latvia'].iloc[0]
+    generation_latvia = dispatch['Wind Generator Latvia'].iloc[0] + dispatch['Coal Latvia'].iloc[0]+dispatch['OCGT Latvia'].iloc[0]
     imbalance_latvia = generation_latvia - load['LV'].iloc[0]
 
     generation_estonia = dispatch['Wind Generator Estonia'].iloc[0] + dispatch['Coal Estonia'].iloc[0] + dispatch['Solar Generator Estonia'].iloc[0] + dispatch['OCGT Estonia'].iloc[0] + dispatch['Battery Discharge Estonia'].iloc[0]
