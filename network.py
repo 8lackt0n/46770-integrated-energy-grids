@@ -16,7 +16,9 @@ class Network():
         self.cop = cop
         self.hours = hours
     
-    def build_network(self, storage=False, transmission=False, external=False, gas=False, h2=False, co2_limit=False, limit=None, h2_storage_cap_mwh=None, heat=None):
+    def build_network(self, storage=False, transmission=False, external=False, gas=False, h2=False, co2_limit=False, limit=None, 
+                      h2_storage_cap_mwh=None,  heat=None, 
+                      overnight_cost_electrolyzer=600_000, overnight_cost_h2_turbine=700_000, overnight_cost_h2_storage=25_000):
 
         # PyPSA requires timezone-naive snapshots.
         snapshots = pd.DatetimeIndex(self.hours)
@@ -107,7 +109,10 @@ class Network():
         if gas:
             self.add_gas_network()
         if h2:
-            self.add_h2_network_with_conversion(h2_storage_cap_mwh=h2_storage_cap_mwh)
+            self.add_h2_network_with_conversion(h2_storage_cap_mwh=h2_storage_cap_mwh, 
+                                                overnight_cost_electrolyzer=overnight_cost_electrolyzer, 
+                                                overnight_cost_h2_turbine=overnight_cost_h2_turbine, 
+                                                overnight_cost_h2_storage=overnight_cost_h2_storage)
         if co2_limit:
             self.add_co2_limit(limit)
         if heat:
@@ -364,7 +369,7 @@ class Network():
             constant=limit  # total CO2 limit (e.g. in tonnes)
         )
 
-    def add_h2_network_with_conversion(self, h2_storage_cap_mwh=None):
+    def add_h2_network_with_conversion(self, h2_storage_cap_mwh=None, overnight_cost_electrolyzer=600_000, overnight_cost_h2_turbine=700_000, overnight_cost_h2_storage=25_000):
 
         countries = ["Estonia", "Latvia", "Sweden", "Finland"]
 
@@ -397,12 +402,12 @@ class Network():
         # --- Hydrogen system CAPEX assumptions (2017-based, EU-consistent) ---
         
 
-        capital_cost_electrolyzer = annuity(20, 0.07) * 600_000 * (1 + 0.033)   # €/MW-year
+        capital_cost_electrolyzer = annuity(20, 0.07) * overnight_cost_electrolyzer * (1 + 0.033)   # €/MW-year
 
-        capital_cost_h2_turbine = annuity(25, 0.07) * 700_000 * (1 + 0.033)     # €/MW-year
+        capital_cost_h2_turbine = annuity(25, 0.07) * overnight_cost_h2_turbine * (1 + 0.033)     # €/MW-year
         # (hydrogen gas turbine, based on 500–900 USD/kW range)
 
-        h2_storage_capital_cost = annuity(30, 0.07) * 25_000 * (1 + 0.033)      # €/MWh_H2-year
+        h2_storage_capital_cost = annuity(30, 0.07) * overnight_cost_h2_storage * (1 + 0.033)      # €/MWh_H2-year
         # (~1000 USD/kg H2 ≈ 25,000 €/MWh)
         
         capital_cost_h2_pipeline = 1 #annuity(40, 0.07) * 100_000 * (1 + 0.033)
@@ -1049,12 +1054,50 @@ if __name__ == "__main__":
     # co2_price = network.network.global_constraints.mu
     # print(co2_price)
     
-    # i) Heat network analysis
-    network = Network(load, wind_cf, solar_cf, hours=hours, heat_demand=heat_demand, cop=cop)
-    network.build_network(storage=True, transmission=True, external=True, heat=True)
-    network.optimize_network()
-    dispatch, capacities = network.save_results()
-    plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission and Heat)", show=False, save=True)
+    # # i) Heat network analysis
+    # network = Network(load, wind_cf, solar_cf, hours=hours, heat_demand=heat_demand, cop=cop)
+    # network.build_network(storage=True, transmission=True, external=True, heat=True)
+    # network.optimize_network()
+    # dispatch, capacities = network.save_results()
+    # plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission and Heat)", show=False, save=True)
     
+    # j) Hydrogen network analysis
     
+    over_night_cost_electrolyzer = 600_000
+    over_night_cost_h2_turbine = 700_000
+    over_night_cost_h2_storage = 25_000
     
+    electrolyzer_scenarios = [over_night_cost_electrolyzer*0.5, over_night_cost_electrolyzer*0.25, over_night_cost_electrolyzer*0.05]
+    h2_turbine_scenarios = [over_night_cost_h2_turbine*0.5, over_night_cost_h2_turbine*0.25, over_night_cost_h2_turbine*0.05]
+    h2_storage_scenarios = [over_night_cost_h2_storage*0.5, over_night_cost_h2_storage*0.25, over_night_cost_h2_storage*0.05]
+    
+    scenario_labels = ["50% reduction", "75% reduction", "95% reduction"]
+    results = []
+        
+    for scenario in range(len(electrolyzer_scenarios)):
+        
+        network = Network(load, wind_cf, solar_cf, hours=hours, heat_demand=heat_demand, cop=cop)
+
+        network.build_network(storage=True, 
+                              transmission=True, 
+                              external=True, 
+                              h2=True, heat=True,
+                              overnight_cost_electrolyzer=electrolyzer_scenarios[scenario], 
+                              overnight_cost_h2_turbine=h2_turbine_scenarios[scenario], 
+                              overnight_cost_h2_storage=h2_storage_scenarios[scenario])
+        
+        network.optimize_network()
+        
+        dispatch, capacities = network.save_results()
+        
+        results.append(
+             {"scenario": scenario_labels[scenario],
+            "electrolyzer_cost": electrolyzer_scenarios[scenario],
+            "h2_turbine_cost": h2_turbine_scenarios[scenario],
+            "h2_storage_cost": h2_storage_scenarios[scenario],
+            "dispatch": dispatch,
+            "capacities": capacities,
+            }          
+             )
+
+    plot_h2_scenarios_by_country(results, f"Optimal Installed Capacity Mix by Country 2017 under Different Hydrogen Cost Scenarios", show=True, save=False)

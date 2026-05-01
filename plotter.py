@@ -1265,6 +1265,98 @@ def plot_h2_capacity_mix_by_country(network, title, show=False, save=True):
 
     if show:
         plt.show()
+
+
+def plot_h2_scenarios_by_country(results, title, show=False, save=True):
+
+    colors, background_color = color_palette()
+
+    countries = ["Estonia", "Finland", "Sweden", "Latvia"]
+    scenario_labels = [r["scenario"] for r in results]
+
+    # Initialize data containers
+    techs = ["Electrolyzer", "H2 Turbine", "H2 Storage"]
+    data = {
+        tech: pd.DataFrame(0.0, index=countries, columns=scenario_labels)
+        for tech in techs
+    }
+
+    # Fill data
+    for result in results:
+        scen = result["scenario"]
+        capacities = result["capacities"]
+
+        for asset_name, row in capacities.iterrows():
+            if not isinstance(asset_name, str):
+                continue
+
+            country = next((c for c in countries if asset_name.endswith(c)), None)
+            if country is None:
+                continue
+
+            if "Electrolyzer" in asset_name:
+                data["Electrolyzer"].loc[country, scen] += row.get("p_nom_opt", 0) or 0
+
+            elif "H2 Turbine" in asset_name:
+                data["H2 Turbine"].loc[country, scen] += row.get("p_nom_opt", 0) or 0
+
+            elif "H2 Storage" in asset_name:
+                data["H2 Storage"].loc[country, scen] += row.get("e_nom_opt", 0) or 0
+
+    # Convert storage to GWh
+    data["H2 Storage"] /= 1000
+
+    # ---- Plot ----
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4), sharex=True)
+    fig.patch.set_facecolor(background_color)
+
+    x = np.arange(len(countries))
+    bar_width = 0.25
+
+    scenario_colors = [colors[10], colors[14], colors[9]]
+
+    panel_info = [
+        ("Electrolyzer", "Electrolyzer [MW]"),
+        ("H2 Turbine", "H2 turbine [MW]"),
+        ("H2 Storage", "H2 storage [GWh]"),
+    ]
+
+    for ax, (tech, ylabel) in zip(axes, panel_info):
+        ax.set_facecolor(background_color)
+
+        for i, scen in enumerate(scenario_labels):
+            values = data[tech][scen].values
+
+            ax.bar(
+                x + (i - 1) * bar_width,
+                values,
+                width=bar_width,
+                label=scen,
+                color=scenario_colors[i],
+                edgecolor="white",
+                linewidth=0.5,
+            )
+
+        ax.set_title(tech, fontweight="bold")
+        ax.set_ylabel(ylabel)
+        ax.set_xticks(x)
+        ax.set_xticklabels(countries, rotation=30, ha="right")
+
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    # Single legend (saves space)
+    axes[0].legend(loc="upper left", frameon=True, facecolor="white")
+
+    fig.suptitle(title, fontsize=13, fontweight="bold", x=0.01, ha="left")
+    fig.tight_layout()
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
         
 def plot_dispatch(time_index, df, load, title, show=False, save=True,
                   power_axis_max=None, soc_axis_max=None):
@@ -2264,8 +2356,7 @@ def plot_heat_dispatch(time_index, df, heat_demand, node, title,
     if show:
         plt.show()
         
-    
-def plot_capacity_mix_by_country_heat(capacities, title, show=False, save=True):
+
 
     colors, background_color = color_palette()
 

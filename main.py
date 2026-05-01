@@ -5,13 +5,14 @@ from network import Network
 from helper import *
 
 ### SECTION CONTROLS ###
-RUN_A_C = True # with and without storage single node 
+RUN_A_C = False # with and without storage single node 
 RUN_D = False # + transmission 
 RUN_E = False # imbalances
 RUN_F = False # CO2 limit analysis
 RUN_G = False # H2 network
 RUN_H = False # CO2 constraint
-RUN_I = False # heat sector
+RUN_I = False  # heat sector
+RUN_J = True  # sensitivity analysis on hydrogen technology costs
 
 ### LOADING DATA ###
 
@@ -404,9 +405,7 @@ if RUN_I:
     network.optimize_network()
     dispatch, capacities = network.save_results()
     
-    plot_capacity_mix_by_country_heat(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
-    
-    plot_heat_dispatch(time_index=january_week,df=dispatch[january_week_mask],heat_demand=heat_demand["EE"][january_week_mask],node="Estonia",title=f"Estonia Heat Dispatch ({scenario_label})",show=False,save=True)
+    plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
     
     h2_pipeline_capacities = network.network.links.loc[
     network.network.links.index.str.contains("H2 Pipeline"),
@@ -416,3 +415,47 @@ if RUN_I:
     print("--------------------------------------------------------")
     print(f"Total H2 pipeline capacity installed: {h2_pipeline_capacities:.1f} MW")
     print("--------------------------------------------------------")
+
+if RUN_J:
+    
+    # j) Sensitivity analysis on hydrogen technology costs
+    
+    over_night_cost_electrolyzer = 600_000
+    over_night_cost_h2_turbine = 700_000
+    over_night_cost_h2_storage = 25_000
+    
+    electrolyzer_scenarios = [over_night_cost_electrolyzer*0.50, over_night_cost_electrolyzer*0.25, over_night_cost_electrolyzer*0.05]
+    h2_turbine_scenarios = [over_night_cost_h2_turbine*0.50, over_night_cost_h2_turbine*0.25, over_night_cost_h2_turbine*0.05]
+    h2_storage_scenarios = [over_night_cost_h2_storage*0.50, over_night_cost_h2_storage*0.25, over_night_cost_h2_storage*0.05]
+    
+    scenario_labels = ["50% reduction", "75% reduction", "95% reduction"]
+    results = []
+        
+    for scenario in range(len(electrolyzer_scenarios)):
+        
+        network = Network(load, wind_cf, solar_cf, hours=hours, heat_demand=heat_demand, cop=cop)
+
+        network.build_network(storage=True, 
+                              transmission=True, 
+                              external=True, 
+                              h2=True, heat=True,
+                              overnight_cost_electrolyzer=electrolyzer_scenarios[scenario], 
+                              overnight_cost_h2_turbine=h2_turbine_scenarios[scenario], 
+                              overnight_cost_h2_storage=h2_storage_scenarios[scenario])
+        
+        network.optimize_network()
+        
+        dispatch, capacities = network.save_results()
+        
+        results.append(
+             {"scenario": scenario_labels[scenario],
+            "electrolyzer_cost": electrolyzer_scenarios[scenario],
+            "h2_turbine_cost": h2_turbine_scenarios[scenario],
+            "h2_storage_cost": h2_storage_scenarios[scenario],
+            "dispatch": dispatch,
+            "capacities": capacities,
+            }          
+             )
+
+    
+    plot_h2_scenarios_by_country(results, f"Optimal Installed Capacity Mix by Country 2017 under Different Hydrogen Cost Scenarios", show=False, save=True)
