@@ -93,7 +93,8 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
     labels = [label for _, label, _ in components]
     pie_colors = [color for _, _, color in components]
 
-    labels_with_totals = [f"{label}\n({val:.0f} MWh)" for label, val in zip(labels, values)]
+    total_val = sum(values) if values else 1.0
+    labels_with_totals = [f"{label}\n({val:.0f} MWh, {100*val/total_val:.1f}%)" for label, val in zip(labels, values)]
     
     fig, ax = plt.subplots(figsize=(14, 8))
     fig.patch.set_facecolor(background_color)
@@ -103,7 +104,6 @@ def plot_annual_energy_mix(df, title, show=False, save=True):
         values,
         labels=labels_with_totals,
         colors=pie_colors,
-        autopct='%1.1f%%',
         startangle=90,
         textprops={'fontsize': 10, 'color': 'black', 'fontweight': 'bold'},
         wedgeprops={'linewidth': 0.5, 'edgecolor': 'white'},
@@ -533,6 +533,128 @@ def plot_storage_operation(time_index, df, title, show=False, save=True):
     if show:
         plt.show()
 
+def plot_h2_storage_operation(time_index, df, title, show=False, save=True):
+    colors, background_color = color_palette()
+
+    fig, ax1 = plt.subplots(figsize=(12, 4))
+    fig.patch.set_facecolor(background_color)
+    ax1.set_facecolor(background_color)
+
+    # H2 charging/discharging proxy:
+    # - Electrolyzers consume electricity to charge H2 storage.
+    # - H2 turbines convert stored H2 back to electricity (discharge proxy).
+    electrolyzer_cols = [col for col in df.columns if "Electrolyzer" in col]
+    turbine_cols = [col for col in df.columns if "H2 Turbine" in col]
+    h2_soc_cols = [col for col in df.columns if "H2 Storage" in col and "SoC" in col]
+
+    charge = np.zeros(len(time_index))
+    for col in electrolyzer_cols:
+        charge += np.asarray(df[col])
+
+    discharge = np.zeros(len(time_index))
+    for col in turbine_cols:
+        discharge += np.asarray(df[col])
+
+    soc = np.zeros(len(time_index))
+    for col in h2_soc_cols:
+        soc += np.asarray(df[col])
+
+    ax1.step(
+        time_index,
+        discharge,
+        where="mid",
+        label="H2-to-Power (Turbine) [MW]",
+        color="#2E7D32",
+        linewidth=1.8,
+    )
+
+    ax1.step(
+        time_index,
+        -charge,
+        where="mid",
+        label="Power-to-H2 (Electrolyzer) [MW]",
+        color="#EF6C00",
+        linewidth=1.8,
+    )
+
+    ax1.fill_between(
+        time_index, 0, discharge,
+        step="mid",
+        alpha=0.22,
+        color="#2E7D32"
+    )
+    ax1.fill_between(
+        time_index, 0, -charge,
+        step="mid",
+        alpha=0.22,
+        color="#EF6C00"
+    )
+
+    ax1.axhline(0, color="black", linewidth=0.8)
+    ax1.set_ylabel("Power [MW]")
+
+    ax2 = ax1.twinx()
+    ax2.step(
+        time_index,
+        soc,
+        where="mid",
+        label="H2 Storage State of Charge [MWh]",
+        color="#1565C0",
+        linewidth=2,
+        linestyle=":",
+    )
+    ax2.set_ylabel("State of Charge [MWh]")
+
+    ax1.text(
+        0.0, 1.07, title,
+        transform=ax1.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+    ax1.text(
+        0.0, 1.01,
+        "H2 storage operation: power-to-H2, H2-to-power, and H2 state of charge",
+        transform=ax1.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    lines_2, labels_2 = ax2.get_legend_handles_labels()
+    ax1.legend(
+        lines_1 + lines_2,
+        labels_1 + labels_2,
+        bbox_to_anchor=(0.5, -0.16),
+        ncol=3,
+        loc="upper center",
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
+
+    ax1.spines["top"].set_visible(False)
+    ax2.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    max_power = max(np.max(charge), np.max(discharge), 1)
+    ax1.set_ylim(-1.15 * max_power, 1.15 * max_power)
+
+    if np.max(soc) > 0:
+        ax2.set_ylim(0, 1.1 * np.max(soc))
+
+    fig.subplots_adjust(bottom=0.25)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+
 def plot_capacities_vs_co2_limits(scenario_results, base_co2, title, show=False, save=True):
     
 
@@ -656,7 +778,7 @@ def plot_capacities_vs_co2_limits(scenario_results, base_co2, title, show=False,
 def plot_total_transmission_comparison(transmission_df, title, show=False, save=True):
     colors, background_color = color_palette()
 
-    gas_columns = [
+    h2_columns = [
         "FIN-SWE H2 Pipeline",
         "EST-FIN H2 Pipeline",
         "EST-SWE H2 Pipeline",
@@ -671,18 +793,18 @@ def plot_total_transmission_comparison(transmission_df, title, show=False, save=
     ]
 
     # Keep only columns that actually exist
-    gas_columns_existing = [col for col in gas_columns if col in transmission_df.columns]
+    h2_columns_existing = [col for col in h2_columns if col in transmission_df.columns]
     electrical_columns_existing = [col for col in electrical_columns if col in transmission_df.columns]
 
-    total_gas = transmission_df[gas_columns_existing].abs().sum().sum() / 1000 if gas_columns_existing else 0.0
+    total_h2 = transmission_df[h2_columns_existing].abs().sum().sum() / 1000 if h2_columns_existing else 0.0
     total_electric = transmission_df[electrical_columns_existing].abs().sum().sum() / 1000 if electrical_columns_existing else 0.0
 
     plot_df = pd.DataFrame({
-        "Transmission Type": ["Electrical", "Hydrogen"],
-        "Total Flow": [total_electric, total_gas]
+        "Transmission Type": ["Electrical", "H2"],
+        "Total Flow": [total_electric, total_h2]
     })
 
-    bar_colors = [colors[0], colors[14]]
+    bar_colors = [colors[0], colors[10]]
 
     fig, ax = plt.subplots(figsize=(8, 5))
     fig.patch.set_facecolor(background_color)
@@ -707,7 +829,7 @@ def plot_total_transmission_comparison(transmission_df, title, show=False, save=
 
     ax.text(
         0.0, 1.01,
-        "Total transported energy through electrical and hydrogen transmission in GWh",
+        "Total transported energy through electrical and H2 transmission in GWh",
         transform=ax.transAxes,
         fontsize=10,
         color="black",
@@ -745,8 +867,8 @@ def plot_capacity_mix(capacities, title, show=False, save=True):
         ("Solar Generator Estonia", "Solar", colors[12]),
     ]
 
-    # Add battery only if present
-    if "Battery Storage Estonia" in capacities.index:
+    # Include battery capacity in the Estonia mix if present in the capacities index
+    if any("Battery Storage" in idx for idx in capacities.index):
         components.append(("Battery Storage Estonia", "Battery", colors[9]))
 
     values = [capacities.loc[col] if col in capacities.index else 0.0 for col, _, _ in components]
@@ -779,9 +901,6 @@ def plot_capacity_mix(capacities, title, show=False, save=True):
             bar.get_x() + bar.get_width() / 2,
             bottom + value / 2,
             f"{value:.0f}",
-            ha="center",
-            va="center",
-            fontsize=9,
             color=_contrast_text_color(color),
         )
         bottom += value
@@ -841,11 +960,12 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
         ("Nuclear", colors[8]),
         ("Coal", colors[15]),
         ("Gas", colors[14]),
-        ("H2", colors[10]),
         ("Hydro", colors[11]),
         ("Wind", colors[13]),
         ("Solar", colors[12]),
         ("Battery", colors[9]),
+        ("H2 Electrolyzer", "#A7E3FF"),
+        ("H2 Turbine", "#6EC6FF"),
         ("Heat Pump", colors[5]),
         ("CHP", colors[1])
     ]
@@ -879,15 +999,17 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
         if country is None:
             continue
 
-        # Choose the right capacity column
+        # Use power capacity for the generic country mix. H2 storage is shown separately.
         p_nom = row["p_nom_opt"] if "p_nom_opt" in capacities.columns and pd.notna(row["p_nom_opt"]) else 0.0
         s_nom = row["s_nom_opt"] if "s_nom_opt" in capacities.columns and pd.notna(row["s_nom_opt"]) else 0.0
 
         # Classify technology
         if "Battery Storage" in asset_name:
             df_plot.loc[country, "Battery"] += p_nom
-        elif "Electrolyzer" in asset_name or "H2 Turbine" in asset_name or "H2 Storage" in asset_name:
-            df_plot.loc[country, "H2"] += p_nom
+        elif "Electrolyzer" in asset_name:
+            df_plot.loc[country, "H2 Electrolyzer"] += p_nom
+        elif "H2 Turbine" in asset_name:
+            df_plot.loc[country, "H2 Turbine"] += p_nom
         elif "Wind" in asset_name:
             df_plot.loc[country, "Wind"] += p_nom
         elif "Solar" in asset_name:
@@ -1028,6 +1150,121 @@ def plot_capacity_mix_by_country(capacities, title, show=False, save=True):
 
     if show:
         plt.show()
+
+def plot_h2_capacity_mix_by_country(network, title, show=False, save=True):
+
+    colors, background_color = color_palette()
+    countries = ["Estonia", "Finland", "Sweden", "Latvia"]
+
+    power_technologies = [
+        ("Electrolyzer", colors[10]),
+        ("H2 Turbine", colors[14]),
+    ]
+    storage_color = colors[9]
+
+    power_df = pd.DataFrame(0.0, index=countries, columns=[tech for tech, _ in power_technologies])
+    storage_df = pd.Series(0.0, index=countries)
+
+    if not network.links.empty:
+        for asset_name, row in network.links.iterrows():
+            if not isinstance(asset_name, str):
+                continue
+            # Include electrolyzers, H2 turbines and pipelines (names vary)
+            if not ("H2" in asset_name or "Electrolyzer" in asset_name or "H2 Turbine" in asset_name or "H2 Pipeline" in asset_name):
+                continue
+
+            country = next((c for c in countries if asset_name.endswith(c)), None)
+            if country is None:
+                continue
+
+            p_nom = row["p_nom_opt"] if "p_nom_opt" in network.links.columns and pd.notna(row["p_nom_opt"]) else 0.0
+
+            if "Electrolyzer" in asset_name:
+                power_df.loc[country, "Electrolyzer"] += p_nom
+            elif "H2 Turbine" in asset_name:
+                power_df.loc[country, "H2 Turbine"] += p_nom
+
+    if not network.stores.empty:
+        for asset_name, row in network.stores.iterrows():
+            if not isinstance(asset_name, str) or "H2 Storage" not in asset_name:
+                continue
+
+            country = next((c for c in countries if asset_name.endswith(c)), None)
+            if country is None:
+                continue
+
+            storage_energy = row["e_nom_opt"] if "e_nom_opt" in network.stores.columns and pd.notna(row["e_nom_opt"]) else 0.0
+            storage_df.loc[country] += storage_energy
+
+    fig, (ax_power, ax_storage) = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
+    fig.patch.set_facecolor(background_color)
+    ax_power.set_facecolor(background_color)
+    ax_storage.set_facecolor(background_color)
+
+    x = np.arange(len(countries))
+    bottom = np.zeros(len(countries))
+
+    for tech, color in power_technologies:
+        values = power_df[tech].values
+        if np.all(values == 0):
+            continue
+
+        bars = ax_power.bar(x, values, bottom=bottom, label=tech, color=color, edgecolor="white", linewidth=0.5)
+        for i, (bar, value) in enumerate(zip(bars, values)):
+            if value <= 0:
+                continue
+            ax_power.text(
+                bar.get_x() + bar.get_width() / 2,
+                bottom[i] + value / 2,
+                f"{value:.0f}",
+                ha="center",
+                va="center",
+                fontsize=8,
+                color=_contrast_text_color(color),
+            )
+        bottom += values
+
+    storage_values = storage_df.values
+    storage_bars = ax_storage.bar(x, storage_values, color=storage_color, edgecolor="white", linewidth=0.5, label="H2 Storage")
+    for bar, value in zip(storage_bars, storage_values):
+        if value <= 0:
+            continue
+        ax_storage.text(
+            bar.get_x() + bar.get_width() / 2,
+            value / 2,
+            f"{value:.0f}",
+            ha="center",
+            va="center",
+            fontsize=8,
+            color=_contrast_text_color(storage_color),
+        )
+
+    ax_power.set_ylabel("Installed power [MW]")
+    ax_storage.set_ylabel("Storage energy [MWh]")
+    ax_storage.set_xticks(x)
+    ax_storage.set_xticklabels(countries)
+
+    ax_power.text(0.0, 1.07, title, transform=ax_power.transAxes, fontsize=14, color="black", ha="left", fontweight="bold")
+    ax_power.text(0.0, 1.01, "H2 converters: electrolyzers and turbines [MW]", transform=ax_power.transAxes, fontsize=10, color="black", ha="left")
+    ax_storage.text(0.0, 1.01, "H2 storage shown as energy capacity [MWh]", transform=ax_storage.transAxes, fontsize=10, color="black", ha="left")
+
+    ax_power.spines["top"].set_visible(False)
+    ax_power.spines["right"].set_visible(False)
+    ax_storage.spines["top"].set_visible(False)
+    ax_storage.spines["right"].set_visible(False)
+
+    ax_power.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=True, facecolor="white", framealpha=1)
+    ax_storage.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=True, facecolor="white", framealpha=1)
+
+    fig.tight_layout()
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
         
 def plot_dispatch(time_index, df, load, title, show=False, save=True,
                   power_axis_max=None, soc_axis_max=None):
@@ -1049,6 +1286,13 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True,
 
     if "Battery Discharge Estonia" in df.columns:
         components.append(("Battery Discharge Estonia", "Battery Discharge", colors[9]))
+
+    # Check for H2 Turbine (generation source) - Estonia-only in the hourly dispatch plot
+    h2_turbine_cols = [col for col in df.columns if "Estonia" in col and "H2 Turbine" in col]
+    if h2_turbine_cols:
+        # Aggregate all H2 turbine columns
+        for col in h2_turbine_cols:
+            components.append((col, "H2 Turbine", "#81C784"))
 
     stack_values = []
     stack_labels = []
@@ -1095,6 +1339,31 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True,
                 zorder=2.5,
             )
 
+    # H2 Electrolyzer as hatched area below generation stack (consumption)
+    electrolyzer_cols = [col for col in df.columns if "Estonia" in col and "Electrolyzer" in col]
+    if electrolyzer_cols and len(stack_values) > 0:
+        electrolyzer_power = np.zeros(len(time_index))
+        for col in electrolyzer_cols:
+            electrolyzer_power += np.asarray(df[col])
+        
+        charging_mask = electrolyzer_power > 0
+        if np.any(charging_mask):
+            upper_bound = total_generation
+            lower_bound = total_generation - electrolyzer_power
+
+            ax1.fill_between(
+                time_index,
+                lower_bound,
+                upper_bound,
+                where=charging_mask,
+                facecolor="none",
+                edgecolor="#FFA726",
+                hatch="\\\\\\",
+                linewidth=0,
+                label="H2 Electrolyzer [MW]",
+                zorder=2.5,
+            )
+
     if "Battery SoC Estonia" in df.columns:
         ax2 = ax1.twinx()
         soc_values = np.asarray(df["Battery SoC Estonia"])
@@ -1106,6 +1375,31 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True,
             linewidth=1.8,
             linestyle=":",
             label="Battery State of Charge [MWh]",
+        )
+        ax2.set_ylabel("State of Charge [MWh]")
+
+        if soc_axis_max is not None:
+            ax2.set_ylim(soc_axis_max * 1.1)
+            
+        ax2.spines["top"].set_visible(False)
+
+    # H2 Storage SoC on secondary axis
+    h2_storage_cols = [col for col in df.columns if "Estonia" in col and "H2 Storage SoC" in col]
+    if h2_storage_cols:
+        if ax2 is None:
+            ax2 = ax1.twinx()
+        
+        h2_soc = np.zeros(len(time_index))
+        for col in h2_storage_cols:
+            h2_soc += np.asarray(df[col])
+        
+        ax2.step(
+            time_index,
+            h2_soc,
+            color="#1976D2",
+            linewidth=1.8,
+            linestyle="--",
+            label="H2 Storage SoC [MWh]",
         )
         ax2.set_ylabel("State of Charge [MWh]")
 
@@ -1126,6 +1420,8 @@ def plot_dispatch(time_index, df, load, title, show=False, save=True,
     subtitle = "Wind, Solar, Gas, and Coal dispatch [MW]"
     if "Battery Discharge Estonia" in df.columns or "Battery SoC Estonia" in df.columns:
         subtitle = "Wind, Solar, Gas, Coal, and battery dispatch dynamics [MW/MWh]"
+    if h2_turbine_cols or electrolyzer_cols:
+        subtitle = "Wind, Solar, Gas, Coal, battery, and H2 dispatch dynamics [MW/MWh]"
 
     ax1.text(
         0.0, 1.07, title,
@@ -1556,6 +1852,309 @@ def plot_transmission_network(dispatch, load, title, show=False, save=True):
     )
 
     ax.axis("off")
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+
+def plot_h2_transmission_network(dispatch, title, show=False, save=True):
+    """
+    Plot a network graph showing H2 transmission flows between countries.
+    Node size and color represent presence of H2 infrastructure.
+    Edge width/color = H2 pipeline flow magnitude.
+    """
+    colors, background_color = color_palette()
+
+    # Define H2 pipeline interconnectors
+    h2_pipelines = [
+        ("FIN-SWE H2 Pipeline", "#87CEEB"),
+        ("EST-FIN H2 Pipeline", "#4A90E2"),
+        ("EST-SWE H2 Pipeline", "#357ABD"),
+        ("EST-LAT H2 Pipeline", "#1E3A8A"),
+    ]
+
+    # Create directed graph
+    G = nx.DiGraph()
+    countries = ["Estonia", "Finland", "Sweden", "Latvia"]
+    G.add_nodes_from(countries)
+
+    country_map_h2 = {
+        "EST": "Estonia",
+        "FIN": "Finland",
+        "SWE": "Sweden",
+        "LAT": "Latvia",
+    }
+
+    flows = {}
+    for pipeline, _ in h2_pipelines:
+        if pipeline in dispatch.columns:
+            flows[pipeline] = dispatch[pipeline].sum()
+
+    edge_labels = {}
+    max_flow = max(abs(f) for f in flows.values()) if flows else 1.0
+
+    for pipeline, line_color in h2_pipelines:
+        if pipeline not in flows:
+            continue
+
+        flow = flows[pipeline]
+        # Extract country codes from pipeline name (e.g., "EST-FIN" from "EST-FIN H2 Pipeline")
+        pipeline_name = pipeline.replace(" H2 Pipeline", "")
+        parts = pipeline_name.split("-")
+        if len(parts) == 2:
+            left_abbrev, right_abbrev = parts
+            left = country_map_h2.get(left_abbrev, left_abbrev)
+            right = country_map_h2.get(right_abbrev, right_abbrev)
+
+            if flow > 0:
+                G.add_edge(left, right, flow=flow)
+                edge_labels[(left, right)] = f"{abs(flow):.0f} MWh"
+            elif flow < 0:
+                G.add_edge(right, left, flow=-flow)
+                edge_labels[(right, left)] = f"{abs(flow):.0f} MWh"
+
+    # Layout and visualization
+    fig, ax = plt.subplots(figsize=(12, 8))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    # Circular layout
+    pos = nx.circular_layout(G, scale=2)
+
+    # Draw nodes with light blue color for H2
+    node_colors = ["#B3E5FC"] * len(countries)
+    nx.draw_networkx_nodes(
+        G, pos,
+        node_color=node_colors,
+        node_size=3000,
+        ax=ax,
+        edgecolors="#1976D2",
+        linewidths=2,
+    )
+
+    # Draw node labels
+    nx.draw_networkx_labels(
+        G, pos,
+        font_size=11,
+        font_weight="bold",
+        font_color="#01579B",
+        ax=ax,
+    )
+
+    # Draw edges with width proportional to flow
+    from matplotlib.patches import FancyArrowPatch
+
+    edge_color_map_h2 = {
+        ("Estonia", "Finland"): "#4A90E2",
+        ("Finland", "Estonia"): "#4A90E2",
+        ("Estonia", "Sweden"): "#357ABD",
+        ("Sweden", "Estonia"): "#357ABD",
+        ("Estonia", "Latvia"): "#1E3A8A",
+        ("Latvia", "Estonia"): "#1E3A8A",
+        ("Finland", "Sweden"): "#87CEEB",
+        ("Sweden", "Finland"): "#87CEEB",
+    }
+
+    for (u, v), flow in nx.get_edge_attributes(G, "flow").items():
+        width = max(1.0, 8 * flow / max_flow) if max_flow > 0 else 1.0
+        edge_color = edge_color_map_h2.get((u, v), "#4A90E2")
+        arrow = FancyArrowPatch(
+            posA=pos[u],
+            posB=pos[v],
+            arrowstyle="-|>",
+            mutation_scale=16 + 8 * (flow / max_flow if max_flow > 0 else 1.0),
+            lw=width,
+            color=edge_color,
+            alpha=0.8,
+            shrinkA=30,
+            shrinkB=30,
+            connectionstyle="arc3,rad=0.18",
+        )
+        ax.add_patch(arrow)
+
+    # Draw edge labels (flow values)
+    for (u_country, v_country), label in edge_labels.items():
+        midpoint = (pos[u_country] + pos[v_country]) / 2
+        direction = pos[v_country] - pos[u_country]
+        norm = np.linalg.norm(direction)
+        offset = np.array([0.0, 0.0])
+        if norm > 0:
+            offset = np.array([-direction[1], direction[0]]) / norm * 0.18
+
+        x = midpoint[0] + offset[0]
+        y = midpoint[1] + offset[1]
+        ax.text(
+            x, y, label,
+            fontsize=8,
+            ha="center",
+            va="center",
+            bbox=dict(boxstyle="round,pad=0.25", facecolor="white", alpha=0.85),
+        )
+
+    ax.text(
+        0.0, 1.07, title,
+        transform=ax.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    ax.text(
+        0.0, 1.01,
+        "Annual net H2 transmission flows between countries (MWh)",
+        transform=ax.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax.axis("off")
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+
+def plot_h2_dispatch(time_index, dispatch, title, show=False, save=True,
+                     power_axis_max=None, soc_axis_max=None):
+    """
+    Plot hourly H2 system dispatch: electrolyzer consumption vs. turbine generation,
+    with H2 storage state of charge on secondary axis.
+    """
+    colors, background_color = color_palette()
+
+    fig, ax1 = plt.subplots(figsize=(12, 4))
+    fig.patch.set_facecolor(background_color)
+    ax1.set_facecolor(background_color)
+
+    ax2 = None
+
+    # Collect electrolyzer columns (sum across all countries)
+    electrolyzer_cols = [col for col in dispatch.columns if "Electrolyzer" in col]
+    turbine_cols = [col for col in dispatch.columns if "H2 Turbine" in col]
+    storage_cols = [col for col in dispatch.columns if "H2 Storage" in col and "SoC" in col]
+
+    # Sum electrolyzer consumption (negative, shown as consumption)
+    electrolyzer_power = np.zeros(len(time_index))
+    for col in electrolyzer_cols:
+        if col in dispatch.columns:
+            electrolyzer_power += np.asarray(dispatch[col])
+
+    # Sum turbine generation (positive, shown as generation)
+    turbine_power = np.zeros(len(time_index))
+    for col in turbine_cols:
+        if col in dispatch.columns:
+            turbine_power += np.asarray(dispatch[col])
+
+    # Sum H2 storage SoC
+    storage_soc = np.zeros(len(time_index))
+    for col in storage_cols:
+        if col in dispatch.columns:
+            storage_soc += np.asarray(dispatch[col])
+
+    # Plot electrolyzer consumption as hatched area below zero
+    electrolyzer_mask = electrolyzer_power > 0
+    if np.any(electrolyzer_mask):
+        ax1.fill_between(
+            time_index,
+            -electrolyzer_power,
+            0,
+            where=electrolyzer_mask,
+            facecolor="#FFE082",
+            edgecolor="#FFA726",
+            linewidth=0.5,
+            label="H2 Electrolyzer [MW]",
+            alpha=0.8
+        )
+
+    # Plot turbine generation
+    if np.any(turbine_power > 0):
+        ax1.fill_between(
+            time_index,
+            0,
+            turbine_power,
+            facecolor="#81C784",
+            edgecolor="#388E3C",
+            linewidth=0.5,
+            label="H2 Turbine [MW]",
+            alpha=0.8
+        )
+
+    # Add H2 storage SoC on secondary axis
+    if np.any(storage_soc > 0):
+        ax2 = ax1.twinx()
+        ax2.step(
+            time_index,
+            storage_soc,
+            color="#1976D2",
+            linewidth=2,
+            label="H2 Storage SoC [MWh]",
+        )
+        ax2.set_ylabel("H2 Storage State of Charge [MWh]", fontsize=10)
+        
+        if soc_axis_max is not None:
+            ax2.set_ylim(0, soc_axis_max * 1.1)
+        
+        ax2.spines["top"].set_visible(False)
+
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Power [MW]")
+    ax1.axhline(y=0, color="black", linewidth=1, linestyle="-", alpha=0.3)
+
+    if power_axis_max is not None:
+        ax1.set_ylim(-power_axis_max, power_axis_max)
+    else:
+        max_elec = np.max(electrolyzer_power) if np.any(electrolyzer_power) else 0
+        max_turb = np.max(turbine_power) if np.any(turbine_power) else 0
+        axis_max = max(max_elec, max_turb) * 1.1
+        ax1.set_ylim(-axis_max, axis_max)
+
+    ax1.text(
+        0.0, 1.07, title,
+        transform=ax1.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    ax1.text(
+        0.0, 1.01, "H2 system dispatch: electrolyzer consumption (negative) vs. turbine generation (positive) [MW]",
+        transform=ax1.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+    if ax2 is not None:
+        lines_2, labels_2 = ax2.get_legend_handles_labels()
+    else:
+        lines_2, labels_2 = [], []
+
+    ax1.legend(
+        lines_1 + lines_2,
+        labels_1 + labels_2,
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=3,
+        loc="upper center",
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
+
+    fig.subplots_adjust(bottom=0.25)
 
     if save:
         fig_title = title.replace(" ", "_").lower()

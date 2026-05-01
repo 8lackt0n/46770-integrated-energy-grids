@@ -15,9 +15,8 @@ class Network():
         self.heat_demand = heat_demand
         self.cop = cop
         self.hours = hours
-
-    def build_network(self, storage=False, transmission=False, external=False, gas=False, h2=False, co2_limit=False, limit=None, heat=False):
-
+    
+    def build_network(self, storage=False, transmission=False, external=False, gas=False, h2=False, co2_limit=False, limit=None, h2_storage_cap_mwh=None, heat=None):
 
         # PyPSA requires timezone-naive snapshots.
         snapshots = pd.DatetimeIndex(self.hours)
@@ -108,7 +107,7 @@ class Network():
         if gas:
             self.add_gas_network()
         if h2:
-            self.add_h2_network_with_conversion()
+            self.add_h2_network_with_conversion(h2_storage_cap_mwh=h2_storage_cap_mwh)
         if co2_limit:
             self.add_co2_limit(limit)
         if heat:
@@ -128,7 +127,8 @@ class Network():
         efficiency_dispatch = 0.9
 
         max_hours = 12  # energy capacity = power * hours
-        battery_p_nom_max = self.load["EE"].mean() # 2x average load in MW
+        battery_p_nom_max = self.load["EE"].mean() # average load in MW (effectively *12 for MWh)
+        self.battery_p_nom_max = battery_p_nom_max
 
         self.network.add("StorageUnit",
                         "Battery Storage Estonia",
@@ -141,7 +141,11 @@ class Network():
                         efficiency_dispatch=efficiency_dispatch,
                         max_hours=max_hours,
                         cyclic_state_of_charge=True)
-        
+
+    # NOTE: Battery charge/discharge exclusivity previously implemented
+    # here with a binary variable was removed at user's request. The
+    # battery may therefore charge and discharge simultaneously unless
+    # handled elsewhere.
     def add_transmission(self):
 
     
@@ -307,6 +311,7 @@ class Network():
                     marginal_cost = marginal_cost_OCGT)
         
         
+        
         # Ignite Fired Power Plant
         # https://www.econstor.eu/handle/10419/80348
         over_night_cost_IFPP = annualize(1_400_000, 2012, 2017) # in €/MW
@@ -359,7 +364,7 @@ class Network():
             constant=limit  # total CO2 limit (e.g. in tonnes)
         )
 
-    def add_h2_network_with_conversion(self):
+    def add_h2_network_with_conversion(self, h2_storage_cap_mwh=None):
 
         countries = ["Estonia", "Latvia", "Sweden", "Finland"]
 
@@ -390,19 +395,7 @@ class Network():
 
         # Cost assumptions (order-of-magnitude placeholders, EUR/MW-year).
         # --- Hydrogen system CAPEX assumptions (2017-based, EU-consistent) ---
-
-        # Sources:
-        # IEA (2019) - The Future of Hydrogen:
-        # https://www.iea.org/reports/the-future-of-hydrogen
-        #
-        # World Bank (2020) - Green Hydrogen:
-        # https://documents.worldbank.org/en/publication/documents-reports/documentdetail/green-hydrogen-in-developing-countries
-        #
-        # Joule (2019) - Hydrogen storage cost assumption (~1000 USD/kg H2):
-        # https://www.sciencedirect.com/science/article/pii/S2542435119303228
-        #
-        # IRENA (2020) - Green Hydrogen:
-        # https://www.irena.org/publications/2020/Sep/Green-hydrogen
+        
 
         capital_cost_electrolyzer = annuity(20, 0.07) * 600_000 * (1 + 0.033)   # €/MW-year
 
@@ -440,16 +433,30 @@ class Network():
                 marginal_cost=0,
             )
 
-            self.network.add(
-                "Store",
-                f"H2 Storage {country}",
-                bus=f"{country} h2",
-                carrier="H2",
-                e_nom_extendable=True,
-                e_cyclic=False,
-                capital_cost=h2_storage_capital_cost,
-                marginal_cost=0,
-            )
+            # If a per-country H2 storage cap (MWh) is provided, create a fixed-size store.
+            if h2_storage_cap_mwh is not None:
+                self.network.add(
+                    "Store",
+                    f"H2 Storage {country}",
+                    bus=f"{country} h2",
+                    carrier="H2",
+                    e_nom=h2_storage_cap_mwh,
+                    e_nom_extendable=False,
+                    e_cyclic=True,
+                    capital_cost=h2_storage_capital_cost,
+                    marginal_cost=0,
+                )
+            else:
+                self.network.add(
+                    "Store",
+                    f"H2 Storage {country}",
+                    bus=f"{country} h2",
+                    carrier="H2",
+                    e_nom_extendable=True,
+                    e_cyclic=True,
+                    capital_cost=h2_storage_capital_cost,
+                    marginal_cost=0,
+                )
 
         # Add bidirectional H2 pipelines between countries.
         self.network.add(
@@ -829,7 +836,7 @@ class Network():
         self.network.optimize(
             solver_name="gurobi",
             solver_options={"OutputFlag": 0},
-            include_objective_constant=True 
+            include_objective_constant=True,
         )
 
     def display_results(self):
@@ -945,6 +952,24 @@ class Network():
                  discharge.rename(columns={"Battery Storage Estonia": "Battery Discharge Estonia"}), 
                  soc.rename(columns={"Battery Storage Estonia": "Battery SoC Estonia"})], axis=1)
 
+        if not self.network.stores.empty:
+            store_capacities = self.network.stores.e_nom_opt.copy()
+            capacacities = pd.concat([capacacities, store_capacities], ignore_index=False)
+
+            if hasattr(self.network, "stores_t") and hasattr(self.network.stores_t, "e"):
+                store_soc = self.network.stores_t.e.copy()
+                h2_store_cols = [col for col in store_soc.columns if isinstance(col, str) and "H2 Storage" in col]
+                if h2_store_cols:
+                    dispatch = pd.concat(
+                        [
+                            dispatch,
+                            store_soc[h2_store_cols].rename(
+                                columns={col: col.replace("H2 Storage ", "H2 Storage SoC ") for col in h2_store_cols}
+                            ),
+                        ],
+                        axis=1,
+                    )
+
             
         if not self.network.lines.empty:
             line_capacities = self.network.lines.s_nom_opt
@@ -970,7 +995,7 @@ if __name__ == "__main__":
     print(f"COP series length: {len(cop)}")
 
 
-    print(4 * load["EE"].mean())
+    print(load["EE"].mean())
     
     hours = pd.date_range('2017-01-01 00:00','2017-12-31 23:00',freq='h')
     

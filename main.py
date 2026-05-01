@@ -5,13 +5,13 @@ from network import Network
 from helper import *
 
 ### SECTION CONTROLS ###
-RUN_A_C = False # with and without storage single node 
+RUN_A_C = True # with and without storage single node 
 RUN_D = False # + transmission 
 RUN_E = False # imbalances
 RUN_F = False # CO2 limit analysis
 RUN_G = False # H2 network
 RUN_H = False # CO2 constraint
-RUN_I = True # heat sector
+RUN_I = False # heat sector
 
 ### LOADING DATA ###
 
@@ -32,6 +32,23 @@ july_week_mask = (hours >= '2017-07-01') & (hours < '2017-07-08')
 july_week = hours[july_week_mask]
 
 load_est = load["EE"]
+
+
+def print_h2_capacity_summary(network):
+    h2_links = network.network.links
+    h2_stores = network.network.stores
+
+    electrolyzers = h2_links.loc[h2_links.index.str.contains("Electrolyzer", regex=True), "p_nom_opt"].sum()
+    turbines = h2_links.loc[h2_links.index.str.contains("H2 Turbine", regex=True), "p_nom_opt"].sum()
+    pipelines = h2_links.loc[h2_links.index.str.contains("H2 Pipeline", regex=True), "p_nom_opt"].sum()
+    storage_energy = h2_stores.loc[h2_stores.index.str.contains("H2 Storage", regex=True), "e_nom_opt"].sum()
+
+    print("--------------------------------------------------------")
+    print(f"H2 electrolyzers installed: {electrolyzers:.1f} MW")
+    print(f"H2 turbines installed: {turbines:.1f} MW")
+    print(f"H2 pipelines installed: {pipelines:.1f} MW")
+    print(f"H2 storage installed: {storage_energy:.1f} MWh")
+    print("--------------------------------------------------------")
 
 ### ANALYSIS ###
 
@@ -266,41 +283,110 @@ if RUN_G:
         save=True,
     )
 
+    plot_h2_capacity_mix_by_country(
+        network.network,
+        f"H2 Installed Capacity Split by Country 2017 ({scenario_label})",
+        show=False,
+        save=True,
+    )
+
+    plot_h2_capacity_mix_by_country(
+        network.network,
+        f"H2 Installed Capacity Split by Country 2017 ({scenario_label})",
+        show=False,
+        save=True,
+    )
+
     plot_total_transmission_comparison(dispatch, title=f"Total Transported Energy in 2017 ({scenario_label})", show=False, save=True)
 
-    h2_pipeline_capacities = network.network.links.loc[
-        network.network.links.index.str.contains("H2 Pipeline"),
-        "p_nom_opt",
-    ].sum()
+    plot_h2_transmission_network(dispatch, title="H2 Transmission Network 2017", show=False, save=True)
 
-    print("--------------------------------------------------------")
-    print(f"Total H2 pipeline capacity installed: {h2_pipeline_capacities:.1f} MW")
-    print("--------------------------------------------------------")
+    # plot_h2_storage_operation(
+    #     january_week,
+    #     dispatch[january_week_mask],
+    #     title=f"H2 Storage Operation for One Week in January 2017 ({scenario_label})",
+    #     show=False,
+    #     save=True,
+    # )
+
+    # plot_h2_storage_operation(
+    #     july_week,
+    #     dispatch[july_week_mask],
+    #     title=f"H2 Storage Operation for One Week in July 2017 ({scenario_label})",
+    #     show=False,
+    #     save=True,
+    # )
+
+    print_h2_capacity_summary(network)
 
 
 if RUN_H:
     # h) Add carbon emission constraints
 
     network = Network(load,wind_cf, solar_cf, hours=hours)
-    network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=28_000_000 * 0.2)
+    network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=28_000_000 * 0.1)
 
     network.optimize_network()
 
     dispatch, capacities = network.save_results()
 
     scenario_label = "with storage, transmission, H2, and CO2 constraint"
+    soc_max = capacities.get('Battery Storage Estonia', 0)
+    shared_power_axis_max = compute_shared_power_axis_max(dispatch, load_est)
+
+    plot_dispatch(
+        january_week,
+        dispatch[january_week_mask],
+        load_est[january_week_mask],
+        f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
+        power_axis_max=shared_power_axis_max,
+        soc_axis_max=soc_max,
+    )
+
+    plot_dispatch(
+        july_week,
+        dispatch[july_week_mask],
+        load_est[july_week_mask],
+        f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
+        power_axis_max=shared_power_axis_max,
+        soc_axis_max=soc_max,
+    )
 
     plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
+
+    plot_transmission_network(dispatch, load, f"Transmission Network Flows 2017 ({scenario_label})", show=False, save=True)
+    plot_country_balance(dispatch, load, f"Country Energy Balance 2017 ({scenario_label})", show=False, save=True)
+    plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
+
+    plot_h2_capacity_mix_by_country(
+        network.network,
+        f"H2 Installed Capacity Split by Country 2017 ({scenario_label})",
+        show=False,
+        save=True,
+    )
+
+    plot_total_transmission_comparison(dispatch, title="Total Transported Energy in 2017 (CO2_constraint)", show=False, save=True)
+
+    plot_h2_transmission_network(dispatch, title="H2 Transmission Network 2017 (CO2_constraint)", show=False, save=True)
+
+    plot_h2_storage_operation(
+        january_week,
+        dispatch[january_week_mask],
+        title=f"H2 Storage Operation for One Week in January 2017 ({scenario_label})",
+        show=False,
+        save=True,
+    )
+
+    plot_h2_storage_operation(
+        july_week,
+        dispatch[july_week_mask],
+        title=f"H2 Storage Operation for One Week in July 2017 ({scenario_label})",
+        show=False,
+        save=True,
+    )
+
+    print_h2_capacity_summary(network)
     
-    h2_pipeline_capacities = network.network.links.loc[
-    network.network.links.index.str.contains("H2 Pipeline"),
-    "p_nom_opt",
-        ].sum()
-
-    print("--------------------------------------------------------")
-    print(f"Total H2 pipeline capacity installed: {h2_pipeline_capacities:.1f} MW")
-    print("--------------------------------------------------------")
-
 
     co2_price = network.network.global_constraints.mu
     print("--------------------------------------------------------")
