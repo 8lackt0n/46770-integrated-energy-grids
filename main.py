@@ -236,3 +236,63 @@ print("--------------------------------------------------------")
 print("CO2 Price: ")
 print(co2_price)
 print("--------------------------------------------------------")
+
+
+
+# j) Gas scarcity experiment
+
+gas_limit_shares = [1.0, 0.75, 0.50, 0.25, 0.0]
+gas_scarcity_results = []
+
+for gas_limit_share in gas_limit_shares:
+    network = Network(load, wind_cf, solar_cf, hours)
+
+    network.build_network(
+        storage=True,
+        transmission=True,
+        external=True,
+        gas=True,
+        co2_limit=True,
+        limit=28_000_000 * 0.01,
+        gas_limit_share=gas_limit_share,
+    )
+
+    network.optimize_network()
+    dispatch, capacities = network.save_results()
+
+    gas_scarcity_results.append({
+        "gas_limit_share": gas_limit_share,
+        "dispatch": dispatch,
+        "capacities": capacities,
+        "objective": network.network.objective,
+    })
+
+    print("--------------------------------------------------------")
+    print("Gas share:", gas_limit_share)
+    print(network.network.global_constraints)
+    print(dispatch["Gas Supply Latvia"].sum())
+    print("--------------------------------------------------------")
+
+
+
+gas_scarcity_summary = pd.DataFrame([
+    {
+        "Gas availability share": r["gas_limit_share"],
+        "System cost": r["objective"],
+        "Wind Estonia": r["capacities"].get("Wind Generator Estonia", 0),
+        "Solar Estonia": r["capacities"].get("Solar Generator Estonia", 0),
+        "OCGT Estonia": r["capacities"].get("OCGT Estonia", 0),
+        "Battery Estonia": r["capacities"].get("Battery Storage Estonia", 0),
+        "Gas supply Latvia": r["capacities"].get("Gas Supply Latvia", 0),
+    }
+    for r in gas_scarcity_results
+])
+
+print("--------------------------------------------------------")
+print(gas_scarcity_summary)
+print("--------------------------------------------------------")
+print(network.network.generators.p_nom_opt)
+print(network.network.links.p_nom_opt)
+print(dispatch.sum().sort_values(ascending=False).head(20))
+print(network.network.global_constraints)
+print("--------------------------------------------------------")

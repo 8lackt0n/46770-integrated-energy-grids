@@ -14,7 +14,7 @@ class Network():
         self.solar_cf = solar_cf
         self.hours = hours
     
-    def build_network(self, storage=False, transmission=False, external=False, gas=False, co2_limit=False, limit=None):
+    def build_network(self, storage=False, transmission=False, external=False, gas=False, co2_limit=False, limit=None,gas_limit_share=None):
 
         # PyPSA requires timezone-naive snapshots.
         snapshots = pd.DatetimeIndex(self.hours)
@@ -96,6 +96,8 @@ class Network():
                     capital_cost = capital_cost_coal,
                     marginal_cost = marginal_cost_coal)
         
+
+
         if storage:
             self.add_storage()
         if transmission:
@@ -104,12 +106,32 @@ class Network():
             self.add_external()
         if gas:
             self.add_gas_network()
+        if gas and gas_limit_share is not None:
+            self.add_gas_limit(gas_limit_share)
         if co2_limit:
             self.add_co2_limit(limit)
-
-        
         self.network.sanitize()
+
+    def add_gas_limit(self, gas_limit_share):
+        reference_gas_supply = 1_473_684.210526266  # MWh_th/year
+        reference_gas_capacity = 11317.996913  # MW from unconstrained result
+
+        # Set gas_use attribute on the Gas carrier / generator
+        #self.network.carriers.at["Gas", "gas_use"] = 1.0
         
+        self.network.generators.loc["Gas Supply Latvia", "p_nom_max"] = (
+            gas_limit_share * reference_gas_capacity
+        )
+
+        self.network.add(
+            "GlobalConstraint",
+            "gas_availability_limit",
+            type="operational_limit",
+            carrier_attribute="gas_use",
+            sense="<=",
+            constant=gas_limit_share * reference_gas_supply,
+        )
+
     def add_storage(self):
 
         # https://www.sciencedirect.com/science/article/pii/S0378775312014759?via%3Dihub
@@ -625,21 +647,21 @@ class Network():
         
         print("Saving results...")
         
-        capacacities = pd.DataFrame()
+        capacities = pd.DataFrame()
         
         dispatch = pd.DataFrame(index=self.network.snapshots)
         
         
         if not self.network.generators.empty:
             gen_capacities = self.network.generators.p_nom_opt
-            capacacities = pd.concat([capacacities, gen_capacities], ignore_index=False)
+            capacities = pd.concat([capacities, gen_capacities], ignore_index=False)
             
             gen_dispatch = self.network.generators_t.p.copy()
             dispatch = pd.concat([dispatch, gen_dispatch], axis=1)
             
         if not self.network.links.empty:
             link_capacities = self.network.links.p_nom_opt
-            capacacities = pd.concat([capacacities, link_capacities], ignore_index=False)
+            capacities = pd.concat([capacities, link_capacities], ignore_index=False)
             
             link_dispatch = -self.network.links_t.p1.copy() 
             dispatch = pd.concat([dispatch, link_dispatch], axis=1)
@@ -647,7 +669,7 @@ class Network():
         if not self.network.storage_units.empty:
             storage_capacities = self.network.storage_units_t.state_of_charge.max().copy()
             storage_capacities = storage_capacities.rename("p_nom_opt")
-            capacacities = pd.concat([capacacities, storage_capacities], ignore_index=False)
+            capacities = pd.concat([capacities, storage_capacities], ignore_index=False)
 
             charge = self.network.storage_units_t.p_store.copy()
             discharge = self.network.storage_units_t.p_dispatch.copy()
@@ -661,13 +683,13 @@ class Network():
             
         if not self.network.lines.empty:
             line_capacities = self.network.lines.s_nom_opt
-            capacacities = pd.concat([capacacities, line_capacities], ignore_index=False)
+            capacities = pd.concat([capacities, line_capacities], ignore_index=False)
             
             line_flows = self.network.lines_t.p0.copy()
             dispatch = pd.concat([dispatch, line_flows], axis=1)    
             
         
-        return dispatch, capacacities
+        return dispatch, capacities
 
 if __name__ == "__main__":
     
