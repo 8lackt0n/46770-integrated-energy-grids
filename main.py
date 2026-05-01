@@ -187,37 +187,27 @@ if RUN_E:
     if not RUN_D:
         raise RuntimeError("Section e requires section d to be enabled.")
 
-    # calculate imbalances in each node for the first hour
-    # Finland
-    generation_finland = dispatch['Wind Generator Finland'].iloc[0] + dispatch['Nuclear Finland'].iloc[0]+dispatch['OCGT Finland'].iloc[0]
-    imbalance_finland = generation_finland - load['FI'].iloc[0]
-    # Sweden (SE2)
-    generation_sweden = dispatch['Wind Generator Sweden'].iloc[0] + dispatch['Hydro Sweden'].iloc[0]+dispatch['OCGT Sweden'].iloc[0]
-    imbalance_sweden = generation_sweden - load['SE'].iloc[0]
-    # Latvia
-    generation_latvia = dispatch['Wind Generator Latvia'].iloc[0] + dispatch['Coal Latvia'].iloc[0]+dispatch['OCGT Latvia'].iloc[0]
-    imbalance_latvia = generation_latvia - load['LV'].iloc[0]
+    dispatch.index = dispatch.index.tz_localize(None)
+    load.index = load.index.tz_localize(None)
+    
+    imbalances = calculate_imbalances(dispatch, load)
 
-    generation_estonia = dispatch['Wind Generator Estonia'].iloc[0] + dispatch['Coal Estonia'].iloc[0] + dispatch['Solar Generator Estonia'].iloc[0] + dispatch['OCGT Estonia'].iloc[0] + dispatch['Battery Discharge Estonia'].iloc[0]
-    imbalance_estonia = generation_estonia - (load['EE'].iloc[0] + dispatch['Battery Charge Estonia'].iloc[0])
+    # first hour only (as a Series)
+    first_hour = imbalances.iloc[0]
 
-    # create dataframe for imbalances
-    imbalance_df = pd.DataFrame({
-        "Finland": imbalance_finland,
-        "Sweden": imbalance_sweden,
-        "Latvia": imbalance_latvia,
-        "Estonia": imbalance_estonia,
-    }, index=[dispatch.index[0]])
+    # convert to DataFrame with same structure as before
+    imbalance_df = pd.DataFrame(first_hour).T
+    imbalance_df.index = [dispatch.index[0]]
+
     print("--------------------------------------------------------")
-
     print("Imbalances in each node for the first hour:")
     print(imbalance_df)
 
-    # print power flows in each line for the first hour
+    # power flows (unchanged)
     print("Power flows in each line for the first hour:")
     print(network.network.lines_t.p0.loc[network.network.snapshots[0]])
     print("--------------------------------------------------------")
-
+   
 if RUN_F:
     # f) CO2 limit analysis
     # https://kliimaministeerium.ee/sites/default/files/documents/2024-04/Energy%20summary_2024.pdf?
@@ -300,7 +290,14 @@ if RUN_G:
         save=True,
     )
 
-    plot_total_transmission_comparison(dispatch, title="Total Transported Energy in 2017", show=False, save=True)
+    plot_h2_capacity_mix_by_country(
+        network.network,
+        f"H2 Installed Capacity Split by Country 2017 ({scenario_label})",
+        show=False,
+        save=True,
+    )
+
+    plot_total_transmission_comparison(dispatch, title=f"Total Transported Energy in 2017 ({scenario_label})", show=False, save=True)
 
     plot_h2_transmission_network(dispatch, title="H2 Transmission Network 2017", show=False, save=True)
 
@@ -447,8 +444,22 @@ if RUN_H:
 if RUN_I:
     
     # i) Add heat sector
+    scenario_label = "with storage, transmission, H2, CO2 constraint, and heat"
+    
     network = Network(load,wind_cf, solar_cf,hours=hours, heat_demand=heat_demand, cop=cop)
-    network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=28_000_000 * 0.2, heat=True)
+    network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=68_750_000 * 0.1, heat=True)
     network.optimize_network()
     dispatch, capacities = network.save_results()
-    plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 (with Storage, Transmission, H2, and Heat)", show=False, save=True)
+    
+    plot_capacity_mix_by_country_heat(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
+    
+    plot_heat_dispatch(time_index=january_week,df=dispatch[january_week_mask],heat_demand=heat_demand["EE"][january_week_mask],node="Estonia",title=f"Estonia Heat Dispatch ({scenario_label})",show=False,save=True)
+    
+    h2_pipeline_capacities = network.network.links.loc[
+    network.network.links.index.str.contains("H2 Pipeline"),
+    "p_nom_opt",
+        ].sum()
+
+    print("--------------------------------------------------------")
+    print(f"Total H2 pipeline capacity installed: {h2_pipeline_capacities:.1f} MW")
+    print("--------------------------------------------------------")

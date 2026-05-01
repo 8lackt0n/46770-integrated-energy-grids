@@ -395,19 +395,7 @@ class Network():
 
         # Cost assumptions (order-of-magnitude placeholders, EUR/MW-year).
         # --- Hydrogen system CAPEX assumptions (2017-based, EU-consistent) ---
-
-        # Sources:
-        # IEA (2019) - The Future of Hydrogen:
-        # https://www.iea.org/reports/the-future-of-hydrogen
-        #
-        # World Bank (2020) - Green Hydrogen:
-        # https://documents.worldbank.org/en/publication/documents-reports/documentdetail/green-hydrogen-in-developing-countries
-        #
-        # Joule (2019) - Hydrogen storage cost assumption (~1000 USD/kg H2):
-        # https://www.sciencedirect.com/science/article/pii/S2542435119303228
-        #
-        # IRENA (2020) - Green Hydrogen:
-        # https://www.irena.org/publications/2020/Sep/Green-hydrogen
+        
 
         capital_cost_electrolyzer = annuity(20, 0.07) * 600_000 * (1 + 0.033)   # €/MW-year
 
@@ -481,7 +469,7 @@ class Network():
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
             capital_cost=capital_cost_h2_pipeline,
-            marginal_cost=0.0001,
+            marginal_cost=0.00001,
         )
 
         self.network.add(
@@ -494,7 +482,7 @@ class Network():
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
             capital_cost=capital_cost_h2_pipeline,
-            marginal_cost=0.0001,
+            marginal_cost=0.00001,
         )
 
         self.network.add(
@@ -507,7 +495,7 @@ class Network():
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
             capital_cost=capital_cost_h2_pipeline,
-            marginal_cost=0.0001,
+            marginal_cost=0.00001,
         )
 
         self.network.add(
@@ -520,7 +508,7 @@ class Network():
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
             capital_cost=capital_cost_h2_pipeline,
-            marginal_cost=0.0001,
+            marginal_cost=0.00001,
         )
     
     def add_gas_network(self):
