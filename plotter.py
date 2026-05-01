@@ -2548,6 +2548,38 @@ def plot_heat_dispatch(time_index, df, heat_demand, node, title,
     fig.subplots_adjust(right=0.8)
     
     
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+
+#sensitivity analysis of CO2 reduction targets on CO2 price
+def plot_co2_price_sensitivity(reduction_targets, co2_prices, title, show=False, save=True):
+    """
+    Plot the sensitivity of CO2 price to different CO2 reduction targets.
+    """
+    colors, background_color = color_palette()
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+
+    ax.plot(reduction_targets, co2_prices, marker='o', linestyle='-', color=colors[5])
+    ax.set_xlabel("CO2 Reduction Target (%)", fontsize=12)
+    ax.set_xticks(reduction_targets)
+    ax.set_ylabel("CO2 Price (€/tonne)", fontsize=12)
+    ax.set_title(title, fontsize=14, fontweight="bold", color="black")
+    ax.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+
+    # Annotate points with CO2 price values
+    for target, price in zip(reduction_targets, co2_prices):
+            ax.text(target, price, f"{price:.1f} €/t", fontsize=9, ha='center', va='bottom')
+
     if save:
         fig_title = title.replace(" ", "_").lower()
         print("Saving:", fig_title)
