@@ -6,11 +6,11 @@ from helper import *
 
 ### SECTION CONTROLS ###
 RUN_A_C = False # with and without storage single node 
-RUN_D = True # + transmission 
-RUN_E = True # imbalances
+RUN_D = False # + transmission 
+RUN_E = False # imbalances
 RUN_F = False # CO2 limit analysis
 RUN_G = False # H2 network
-RUN_H = False # CO2 constraint
+RUN_H = True # CO2 constraint
 RUN_I = False # heat sector
 
 ### LOADING DATA ###
@@ -325,77 +325,124 @@ if RUN_G:
 
 if RUN_H:
     # h) Add carbon emission constraints
+    run_co2_limit_plots = False
+    run_co2_limit_sensitivity = True
 
-    network = Network(load,wind_cf, solar_cf, hours=hours)
-    network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=28_000_000 * 0.1)
+    co2_1990_ee = 28_300_000 # tons of CO2 (electricity and heating sector) in 1990 for Estonia
+    co2_1990_fi = 19_900_000 # tons of CO2 (electricity and heating sector) in 1990 for Finland
+    co2_1990_se = 9_800_000 # tons of CO2 (electricity and heating sector) in 1990 for Sweden
+    co2_1990_lv = 9_850_000 # tons of CO2 (electricity and heating sector) in 1990 for Latvia
+    co2_1990_total = co2_1990_ee + co2_1990_fi + co2_1990_se + co2_1990_lv
+    
+    
+    def co2_reduction_plots(dispatch, capacities, network, reduction_target):
+        scenario_label = f"with storage, transmission, H2, and CO2 constraint ({int(reduction_target) * 100}% reduction)"
+        soc_max = capacities.get('Battery Storage Estonia', 0)
+        shared_power_axis_max = compute_shared_power_axis_max(dispatch, load_est)
 
-    network.optimize_network()
+        plot_dispatch(
+            january_week,
+            dispatch[january_week_mask],
+            load_est[january_week_mask],
+            f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
+            power_axis_max=shared_power_axis_max,
+            soc_axis_max=soc_max,
+        )
 
-    dispatch, capacities = network.save_results()
+        plot_dispatch(
+            july_week,
+            dispatch[july_week_mask],
+            load_est[july_week_mask],
+            f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
+            power_axis_max=shared_power_axis_max,
+            soc_axis_max=soc_max,
+        )
 
-    scenario_label = "with storage, transmission, H2, and CO2 constraint"
-    soc_max = capacities.get('Battery Storage Estonia', 0)
-    shared_power_axis_max = compute_shared_power_axis_max(dispatch, load_est)
+        plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
 
-    plot_dispatch(
-        january_week,
-        dispatch[january_week_mask],
-        load_est[january_week_mask],
-        f"Optimal Hourly Dispatch for One Week in January 2017 ({scenario_label})",
-        power_axis_max=shared_power_axis_max,
-        soc_axis_max=soc_max,
-    )
+        plot_transmission_network(dispatch, load, f"Transmission Network Flows 2017 ({scenario_label})", show=False, save=True)
+        plot_country_balance(dispatch, load, f"Country Energy Balance 2017 ({scenario_label})", show=False, save=True)
+        plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
 
-    plot_dispatch(
-        july_week,
-        dispatch[july_week_mask],
-        load_est[july_week_mask],
-        f"Optimal Hourly Dispatch for One Week in July 2017 ({scenario_label})",
-        power_axis_max=shared_power_axis_max,
-        soc_axis_max=soc_max,
-    )
+        plot_h2_capacity_mix_by_country(
+            network.network,
+            f"H2 Installed Capacity Split by Country 2017 ({scenario_label})",
+            show=False,
+            save=True,
+        )
 
-    plot_capacity_mix_by_country(capacities, f"Optimal Installed Capacity Mix by Country 2017 ({scenario_label})", show=False, save=True)
+        plot_total_transmission_comparison(dispatch, title="Total Transported Energy in 2017 (CO2_constraint)", show=False, save=True)
 
-    plot_transmission_network(dispatch, load, f"Transmission Network Flows 2017 ({scenario_label})", show=False, save=True)
-    plot_country_balance(dispatch, load, f"Country Energy Balance 2017 ({scenario_label})", show=False, save=True)
-    plot_duration_curve(dispatch, f"Duration Curve for 2017 ({scenario_label})")
+        plot_h2_transmission_network(dispatch, title="H2 Transmission Network 2017 (CO2_constraint)", show=False, save=True)
 
-    plot_h2_capacity_mix_by_country(
-        network.network,
-        f"H2 Installed Capacity Split by Country 2017 ({scenario_label})",
-        show=False,
-        save=True,
-    )
+        plot_h2_storage_operation(
+            january_week,
+            dispatch[january_week_mask],
+            title=f"H2 Storage Operation for One Week in January 2017 ({scenario_label})",
+            show=False,
+            save=True,
+        )
 
-    plot_total_transmission_comparison(dispatch, title="Total Transported Energy in 2017 (CO2_constraint)", show=False, save=True)
+        plot_h2_storage_operation(
+            july_week,
+            dispatch[july_week_mask],
+            title=f"H2 Storage Operation for One Week in July 2017 ({scenario_label})",
+            show=False,
+            save=True,
+        )
 
-    plot_h2_transmission_network(dispatch, title="H2 Transmission Network 2017 (CO2_constraint)", show=False, save=True)
+        print_h2_capacity_summary(network)
+        
 
-    plot_h2_storage_operation(
-        january_week,
-        dispatch[january_week_mask],
-        title=f"H2 Storage Operation for One Week in January 2017 ({scenario_label})",
-        show=False,
-        save=True,
-    )
+        co2_price = network.network.global_constraints.mu.values[0]
+        print("--------------------------------------------------------")
+        print("CO2 Price: ")
+        print(co2_price)
+        print("--------------------------------------------------------")
 
-    plot_h2_storage_operation(
-        july_week,
-        dispatch[july_week_mask],
-        title=f"H2 Storage Operation for One Week in July 2017 ({scenario_label})",
-        show=False,
-        save=True,
-    )
+        return
+    
+    if run_co2_limit_sensitivity:
+        sens_co2_limits = [0.55, 0.6, 0.65, 0.7, 0.725, 0.75, 0.8, 0.85, 0.9, 0.95, 0.99] # reduction targets from 1990 levels (e.g., 0.7 means 70% reduction, i.e., 30% of 1990 levels)
+        sens_co2_results = []
+        for reduction_target in sens_co2_limits:
+            # Recalculate co2_limit based on the current reduction_target
+            co2_limit = (1 - reduction_target) * co2_1990_total
+            network = Network(load, wind_cf, solar_cf, hours=hours)
+            network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=co2_limit)
 
-    print_h2_capacity_summary(network)
+            network.optimize_network()
+            dispatch, capacities = network.save_results()
+
+            co2_price = -network.network.global_constraints.mu.iloc[0]
+            sens_co2_results.append(co2_price)
+            
+            print(f"Reduction target: {int(reduction_target * 100)}%, CO2 limit: {co2_limit:.0f} tons, CO2 price: {co2_price:.2f} €/ton")
+        
+        plot_co2_price_sensitivity(sens_co2_limits, sens_co2_results, f"Sensitivity of CO2 Price to Emission Reduction Targets", show=False, save=True)
+
+    else:
+        reduction_target = 0.7 # 70% reduction from 1990 levels
+        co2_limit = (1 - reduction_target) * co2_1990_total
+        print(f"Applying CO2 limit of {co2_limit:.0f} tons, which is {int((1 - reduction_target) * 100)}% of 1990 levels for the entire region.")
+        
+        network = Network(load, wind_cf, solar_cf, hours=hours)
+        network.build_network(storage=True, transmission=True, external=True, h2=True, co2_limit=True, limit=co2_limit)
+
+        network.optimize_network()
+        dispatch, capacities = network.save_results()
+        co2_reduction_plots(dispatch, capacities, network, reduction_target)
+
+    # sens_co2_limits = [0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 0.99] # reduction targets from 1990 levels (e.g., 0.7 means 70% reduction, i.e., 30% of 1990 levels)
+
+    # sens_co2_results = [0.16, 10.70, 35.53, 62.68, 97.58, 144.11, 175.87, 247.43, 446.79, 1694.32] # dummy results for testing the plotting function
+
+    # plot_co2_price_sensitivity(sens_co2_limits, sens_co2_results, f"Sensitivity of CO2 Price to Emission Reduction Targets", show=False, save=True)
+
     
 
-    co2_price = network.network.global_constraints.mu
-    print("--------------------------------------------------------")
-    print("CO2 Price: ")
-    print(co2_price)
-    print("--------------------------------------------------------")
+    
+
 
 if RUN_I:
     
