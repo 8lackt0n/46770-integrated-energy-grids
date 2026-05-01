@@ -678,7 +678,7 @@ def plot_total_transmission_comparison(transmission_df, title, show=False, save=
     total_electric = transmission_df[electrical_columns_existing].abs().sum().sum() / 1000 if electrical_columns_existing else 0.0
 
     plot_df = pd.DataFrame({
-        "Transmission Type": ["Electrical", "Gas"],
+        "Transmission Type": ["Electrical", "Hydrogen"],
         "Total Flow": [total_electric, total_gas]
     })
 
@@ -707,7 +707,7 @@ def plot_total_transmission_comparison(transmission_df, title, show=False, save=
 
     ax.text(
         0.0, 1.01,
-        "Total transported energy through electrical and gas transmission in GWh",
+        "Total transported energy through electrical and hydrogen transmission in GWh",
         transform=ax.transAxes,
         fontsize=10,
         color="black",
@@ -1557,6 +1557,307 @@ def plot_transmission_network(dispatch, load, title, show=False, save=True):
 
     ax.axis("off")
 
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+        
+def plot_heat_dispatch(time_index, df, heat_demand, node, title,
+                       show=False, save=True, heat_axis_max=None):
+
+    colors, background_color = color_palette()
+
+    fig, ax1 = plt.subplots(figsize=(12, 4))
+    fig.patch.set_facecolor(background_color)
+    ax1.set_facecolor(background_color)
+
+    heat_components = [
+        (f"CHP {node} Heat", "CHP Heat", colors[15]),
+        (f"Heat Pump {node}", "Heat Pump", colors[12]),
+    ]
+
+    stack_values = []
+    stack_labels = []
+    stack_colors = []
+
+    for col, label, color in heat_components:
+        if col in df.columns:
+            stack_values.append(np.asarray(df[col]))
+            stack_labels.append(label)
+            stack_colors.append(color)
+
+    if len(stack_values) > 0:
+        ax1.stackplot(
+            time_index,
+            *stack_values,
+            labels=stack_labels,
+            colors=stack_colors
+        )
+
+    heat_demand_values = np.asarray(heat_demand)
+
+    ax1.plot(
+        time_index,
+        heat_demand_values,
+        color="black",
+        linewidth=2,
+        label="Heat demand [MW]"
+    )
+
+    total_heat_generation = (
+        np.sum(np.vstack(stack_values), axis=0)
+        if len(stack_values) > 0
+        else np.zeros(len(time_index))
+    )
+
+    ax1.set_xlabel("Time")
+    ax1.set_ylabel("Heat [MW]")
+
+    if heat_axis_max is not None:
+        ax1.set_ylim(0, heat_axis_max)
+    else:
+        ymax = max(np.max(total_heat_generation), np.max(heat_demand_values)) * 1.1
+        ax1.set_ylim(0, ymax)
+
+    ax1.text(
+        0.0, 1.07, title,
+        transform=ax1.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold"
+    )
+
+    ax1.text(
+        0.0, 1.01, "CHP and heat pump heat dispatch [MW]",
+        transform=ax1.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left"
+    )
+
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    lines_1, labels_1 = ax1.get_legend_handles_labels()
+
+    ax1.legend(
+        lines_1,
+        labels_1,
+        bbox_to_anchor=(0.5, -0.18),
+        ncol=3,
+        loc="upper center",
+        frameon=True,
+        facecolor="white",
+        framealpha=1,
+    )
+
+    fig.subplots_adjust(bottom=0.25)
+
+    if save:
+        fig_title = title.replace(" ", "_").lower()
+        print("Saving:", fig_title)
+        save_plot(fig_title)
+
+    if show:
+        plt.show()
+        
+    
+def plot_capacity_mix_by_country_heat(capacities, title, show=False, save=True):
+
+    colors, background_color = color_palette()
+
+    countries = ["Estonia", "Finland", "Sweden", "Latvia"]
+
+    technologies = [
+        ("Nuclear", colors[8]),
+        ("Coal", colors[15]),
+        ("Gas", colors[14]),
+        ("H2", colors[10]),
+        ("Hydro", colors[11]),
+        ("Wind", colors[13]),
+        ("Solar", colors[12]),
+        ("Battery", colors[9]),
+        ("Heat Pump", colors[5]),
+        ("CHP", colors[1])
+    ]
+
+    # If duplicate asset names exist, combine them
+    capacities = capacities.groupby(capacities.index).sum(numeric_only=True)
+
+    # Empty table: rows=countries, cols=technologies
+    df_plot = pd.DataFrame(
+        0.0,
+        index=countries,
+        columns=[tech for tech, _ in technologies]
+    )
+
+    # Iterate over asset rows
+    for asset_name, row in capacities.iterrows():
+        if not isinstance(asset_name, str):
+            continue
+
+        # Skip transmission lines/interconnectors
+        if "-" in asset_name:
+            continue
+
+        # Find country
+        country = None
+        for c in countries:
+            if asset_name.endswith(c):
+                country = c
+                break
+
+        if country is None:
+            continue
+
+        # Choose the right capacity column
+        p_nom = row["p_nom_opt"] if "p_nom_opt" in capacities.columns and pd.notna(row["p_nom_opt"]) else 0.0
+        s_nom = row["s_nom_opt"] if "s_nom_opt" in capacities.columns and pd.notna(row["s_nom_opt"]) else 0.0
+
+        # Classify technology
+        if "Battery Storage" in asset_name:
+            df_plot.loc[country, "Battery"] += p_nom
+        elif "Electrolyzer" in asset_name or "H2 Turbine" in asset_name or "H2 Storage" in asset_name:
+            df_plot.loc[country, "H2"] += p_nom
+        elif "Wind" in asset_name:
+            df_plot.loc[country, "Wind"] += p_nom
+        elif "Solar" in asset_name:
+            df_plot.loc[country, "Solar"] += p_nom
+        elif "OCGT" in asset_name:
+            df_plot.loc[country, "Gas"] += p_nom
+        elif "Coal" in asset_name:
+            df_plot.loc[country, "Coal"] += p_nom
+        elif "Nuclear" in asset_name:
+            df_plot.loc[country, "Nuclear"] += p_nom
+        elif "Hydro" in asset_name:
+            df_plot.loc[country, "Hydro"] += p_nom
+        elif "Heat Pump" in asset_name:
+            df_plot.loc[country, "Heat Pump"] += p_nom
+        elif "CHP" in asset_name:
+            df_plot.loc[country, "CHP"] += p_nom
+        
+    fig, ax = plt.subplots(figsize=(12, 6))
+    fig.patch.set_facecolor(background_color)
+    ax.set_facecolor(background_color)
+
+    x = np.arange(len(countries))
+    bottom = np.zeros(len(countries))
+    plotted = False
+    totals = df_plot.sum(axis=1).values
+
+    inside_label_fraction = 0.08
+    inside_label_min_abs = 120.0
+    outside_x_offset = 0.18
+    outside_label_min_gap = max(np.max(totals) * 0.02, 25.0) if len(totals) > 0 else 25.0
+    outside_label_positions = {i: [] for i in range(len(countries))}
+
+    for tech, color in technologies:
+        values = df_plot[tech].values
+        if np.all(values == 0):
+            continue
+
+        bars = ax.bar(
+            x,
+            values,
+            bottom=bottom,
+            label=tech,
+            color=color,
+            edgecolor="white",
+            linewidth=0.5,
+        )
+
+        for i, (bar, value) in enumerate(zip(bars, values)):
+            if value <= 0:
+                continue
+
+            y_center = bottom[i] + value / 2
+            inside_threshold = max(inside_label_min_abs, inside_label_fraction * totals[i])
+
+            if value >= inside_threshold:
+                ax.text(
+                    bar.get_x() + bar.get_width() / 2,
+                    y_center,
+                    f"{value:.0f}",
+                    ha="center",
+                    va="center",
+                    fontsize=8,
+                    color=_contrast_text_color(color),
+
+                )
+            else:
+                y_text = y_center
+                while any(abs(y_text - y_used) < outside_label_min_gap for y_used in outside_label_positions[i]):
+                    y_text += outside_label_min_gap
+                outside_label_positions[i].append(y_text)
+
+                x_center = bar.get_x() + bar.get_width() / 2
+                x_right = bar.get_x() + bar.get_width()
+
+                ax.annotate(
+                    f"{value:.0f}",
+                    xy=(x_right, y_center),
+                    xytext=(x_center + outside_x_offset, y_text),
+                    ha="left",
+                    va="center",
+                    fontsize=8,
+                    color=_contrast_text_color(color),
+                    arrowprops=dict(
+                        arrowstyle="-",
+                        color=_contrast_text_color(color),
+                        linewidth=0.6,
+                        shrinkA=0,
+                        shrinkB=0,
+                    ),
+                )
+
+        bottom += values
+        plotted = True
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(countries)
+    ax.set_ylabel("Installed capacity [MW]")
+    ax.set_xlim(-0.5, len(countries) - 0.5 + 0.3)
+
+    ax.text(
+        0.0, 1.07,
+        title,
+        transform=ax.transAxes,
+        fontsize=14,
+        color="black",
+        ha="left",
+        fontweight="bold",
+    )
+
+    ax.text(
+        0.0, 1.01,
+        "Installed generator and storage capacity by country [MW]",
+        transform=ax.transAxes,
+        fontsize=10,
+        color="black",
+        ha="left",
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if plotted:
+        ax.legend(
+            loc="center left",
+            bbox_to_anchor=(1.02, 0.5),  # move to right side
+            ncol=1,  # vertical legend looks cleaner here
+            frameon=True,
+            facecolor="white",
+            framealpha=1,
+        )
+
+    # Make room for legend on the right
+    fig.subplots_adjust(right=0.8)
+    
+    
     if save:
         fig_title = title.replace(" ", "_").lower()
         print("Saving:", fig_title)

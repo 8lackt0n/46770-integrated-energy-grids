@@ -462,7 +462,7 @@ class Network():
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
             capital_cost=capital_cost_h2_pipeline,
-            marginal_cost=0.0001,
+            marginal_cost=0.00001,
         )
 
         self.network.add(
@@ -475,7 +475,7 @@ class Network():
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
             capital_cost=capital_cost_h2_pipeline,
-            marginal_cost=0.0001,
+            marginal_cost=0.00001,
         )
 
         self.network.add(
@@ -488,7 +488,7 @@ class Network():
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
             capital_cost=capital_cost_h2_pipeline,
-            marginal_cost=0.0001,
+            marginal_cost=0.00001,
         )
 
         self.network.add(
@@ -501,7 +501,7 @@ class Network():
             p_min_pu=-1,
             efficiency=pipeline_efficiency,
             capital_cost=capital_cost_h2_pipeline,
-            marginal_cost=0.0001,
+            marginal_cost=0.00001,
         )
     
     def add_gas_network(self):
